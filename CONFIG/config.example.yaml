@@ -1,0 +1,58 @@
+# Example configuration for reproducing the EMNLP experiments on a new corpus.
+# Paths are intentionally generic. Do not commit private datasets or API keys.
+
+project_name: sample_news_corpus
+random_state: 42
+
+input:
+  articles: data/articles.csv
+  shares: data/social_shares.csv   # optional; leave empty or omit if unavailable
+  article_id_col: media_url
+  date_col: publication_date_cleaned
+  title_col: title
+  text_col: description
+  url_col: media_url
+
+output_dir: outputs/sample_news_corpus
+
+embedding:
+  # Local SentenceTransformer models are run directly. API models are expected as precomputed embeddings.
+  # Recommended paper ensemble is documented in docs/TABLE_SCHEMAS.md.
+  models:
+    - name: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+      short_name: miniLM
+      type: sentence_transformer
+    - name: sentence-transformers/paraphrase-multilingual-mpnet-base-v2
+      short_name: mpnet
+      type: sentence_transformer
+  precomputed_dir: data/embeddings   # optional, one .npy/.csv per short_name
+  text_template: "{title} {description}"
+
+clustering:
+  reducer: umap
+  n_components: 20
+  umap_n_neighbors: 15
+  umap_min_dist: 0.0
+  clusterer: hdbscan
+  min_cluster_size: 5
+  min_samples: 5
+  alignment_threshold: 0.30
+  snapshot_frequency: D
+
+labeling:
+  recent_cutoff_days: 26
+  max_k: 11
+  selected_k: 4
+  toa_max_neg: 0
+
+features:
+  knn_k: 20
+  recent_outlier_neighbors: 10
+  use_social: true
+  spacy_model: fr_core_news_md
+
+ml:
+  horizon: TA
+  cv_folds: 5
+  random_state: 42
+  thresholds: [1,2,3,4,5,6,7,8]
