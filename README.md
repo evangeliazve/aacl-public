@@ -1,6 +1,5 @@
 # Can Topic-Model Outliers Predict Future Topics?
-
-A prospective study of weak signals in embedding space.
+## A prospective study of weak signals in embedding space.
 
 This repository accompanies the EMNLP submission. It contains the scripts and review workbooks needed to reproduce the paper workflow on a new news corpus and to inspect the article-level feature/target tables used in the reported experiments.
 
