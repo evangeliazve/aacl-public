@@ -4,7 +4,7 @@ This document defines the input, intermediate, and exported tables needed to rep
 
 ## 1. Raw article table
 
-Required columns are configurable in `config/*.yaml`.
+Required columns are configurable in `CONFIG/*.yaml`.
 
 | Column role | Default column | Type | Required | Description |
 |---|---:|---|---|---|
