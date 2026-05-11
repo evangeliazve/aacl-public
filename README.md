@@ -4,7 +4,7 @@ This repository accompanies the EMNLP submission **Can Topic-Model Outliers Pred
 
 It contains the scripts, feature tables, agreement tables, machine-learning results, and interpretation workbooks used to reproduce the analysis on a new news corpus and to inspect the reported experiments.
 
-## What is in the repository?
+## How the repository is organized
 
 The repository is organized around three kinds of material.
 
