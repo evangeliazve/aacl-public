@@ -2,17 +2,12 @@
 
 This repository accompanies the EMNLP submission **Can Topic-Model Outliers Predict Future Topics? A Prospective Study of Weak Signals in Embedding Space**.
 
-It contains the scripts, feature tables, agreement tables, machine-learning results, and interpretation workbooks used to reproduce the analysis on a new news corpus and to inspect the reported experiments.
+The release has two purposes:
 
-## How the repository is organized
+1. **Inspect the reported artifacts.** The `DATA/`, `RESULTS/`, and `APPENDIX/` folders contain the released feature matrices, agreement tables, ML result workbooks, SHAP workbooks, and appendix tables.
+2. **Rerun the shareable supervised stage.** The released article-level feature matrices can be passed directly to scripts 6 and 7. The original article text, collection dumps, raw social-media traces, and some embedding caches are not redistributed.
 
-The repository is organized around three kinds of material.
-
-First, `DATA/` contains the article-level feature matrices used in the supervised experiments. These files include the article URLs, agreement threshold `k`, binary target, and final features. They make it possible to inspect the URLs used in the experiments and to rerun the machine-learning and SHAP stages without redistributing the original article text or raw social-media traces.
-
-Second, `RESULTS/` contains the reported experimental outputs. The result workbooks include machine-learning performance across several agreement thresholds `k`, all classifiers, feature-family ablations, and simple baselines. They report F1-score, recall, precision, average precision, ROC AUC, and the corresponding cross-validation standard deviations. The folder also contains the agreement matrices and the SHAP interpretation workbooks used for the analysis.
-
-Third, `SCRIPTS/`, `CONFIG/`, and `DOCS/` document and reproduce the full pipeline on a new corpus with the same table structure.
+The full pipeline scripts are included so that the same workflow can be applied to a new local corpus that follows the schemas in `DOCS/TABLE_SCHEMAS.md`. Exact end-to-end reproduction of the submitted experiments requires the non-redistributed raw corpus and the same embedding/preprocessing setup.
 
 ## Repository structure
 
@@ -42,11 +37,9 @@ RESULTS/
   agreement/
     agreement_hdbscan_th30_d20.xlsx
     agreement_hdbscan_th30_d20_climat.xlsx
-
   climatenewsfr/
     climatenewsfr_results.xlsx
     climatenewsfr_interpretability_k660_xgboost.xlsx
-
   hydronewsfr/
     hydronewsfr_results.xlsx
     hydronewsfr_interpretability_k440_xgboost.xlsx
@@ -54,10 +47,6 @@ RESULTS/
 APPENDIX/
   ml_feature_glossary.xlsx
   additional_experiments/
-    climatenewsfr_toa_correlations_by_model.xlsx
-    hydronewsfr_toa_correlations_by_model.xlsx
-    hydronewsfr_extended_results.xlsx
-    hydronewsfr_extended_chronological_eval_k440.xlsx
 
 requirements.txt
 environment.yml
@@ -65,86 +54,103 @@ run_all.sh
 README.md
 ```
 
-## Included workbooks
+## Released data and result files
 
-### Article-level feature matrices in `DATA/`
-
-The two files below contain the supervised article-level tables used by the modeling scripts:
+### Article-level feature matrices
 
 ```text
 DATA/hydronewsfr_article-url_target_features_all_k.xlsx
 DATA/climatenewsfr_article-url_target_features_all_k.xlsx
 ```
 
-Each workbook has a `feature_matrix` sheet. The main columns are:
+Each workbook has one sheet, `feature_matrix`. Rows are article-threshold pairs. The main columns are:
 
-- `article_url`: URL used as the article identifier in the released table;
-- `agreement_k`: agreement threshold used to define the target;
-- `label_TOA`: binary target, where 1 marks anticipatory outliers and 0 marks non-anticipatory outliers;
+- `article_url`: URL used as the article identifier in the released matrix;
+- `agreement_k`: released diagonal agreement threshold, with `agreement_k = outlier_k = toa_k`;
+- `label_TOA`: binary supervised target, where 1 marks a consensus anticipatory outlier and 0 marks a confident non-anticipatory publication-time outlier;
 - `n_models_present`: number of embedding-model representations available for the article;
-- geometric, text, and social features used in the supervised experiments.
+- geometric, text, named-entity, and social/co-sharing features used by scripts 6 and 7.
 
+The released feature matrices contain `agreement_k` values 1 through 8.
 
-### Machine-learning results in `RESULTS/`
-
-The main performance workbooks are:
+### Machine-learning result workbooks
 
 ```text
 RESULTS/hydronewsfr/hydronewsfr_results.xlsx
 RESULTS/climatenewsfr/climatenewsfr_results.xlsx
 ```
 
-Each contains two sheets.
+Each workbook contains one sheet:
 
-`ml_metrics_with_ablation` reports the cross-validated results across agreement settings and model variants. It includes:
+```text
+ml_metrics_with_ablation
+```
 
-- horizon and agreement rule: `horizon`, `outlier_maj`, `toa_min_pos`, `toa_max_neg`;
-- model and ablation setting: `clf_name`, `ablation`;
-- retained sample size: `n_articles`, `n_pos_articles_est`, `n_neg_articles_est`;
-- main metrics: `F1_mean`, `Precision_mean`, `Recall_mean`;
-- additional ranking metrics: `AP_mean`, `ROC_AUC_mean`;
-- standard deviations for each metric.
+The sheet reports cross-validated results for the released diagonal agreement settings, where:
 
-The classifiers include Logistic Regression, Linear SVC, Decision Tree, Random Forest, XGBoost, and simple baselines. The ablation rows compare the full feature set with geometry-only, text-only, social-only, and feature-removal settings.
+```text
+outlier_k = toa_k = agreement_k
+toa_max_neg = 0
+```
 
-`uncertain_scoring` summarizes predictions for articles that are not assigned a confident consensus label under a given agreement rule. It reports the number of uncertain articles and the distribution of predicted positive-class probabilities: mean, median, 10th percentile, and 90th percentile.
+The columns include `horizon`, `outlier_k`, `toa_k`, `toa_max_neg`, `cv_n_splits`, `clf_name`, `ablation`, `n_articles`, class counts, and fold means/standard deviations for F1, precision, recall, average precision (`AP_*`), and ROC AUC (`ROC_AUC_*`).
 
-### Agreement matrices in `RESULTS/agreement/`
+The supervised models are:
+
+```text
+xgb, rf, logreg, linear_svc, dt
+```
+
+The released ablations are:
+
+```text
+all_features
+no_geom
+no_social
+no_text
+only_geom
+only_social
+only_text
+```
+
+The baseline row is `baseline_all_pos`. It is reported once per agreement threshold, not once per ablation; its ablation field is `n/a`.
+
+### Agreement matrices
 
 ```text
 RESULTS/agreement/agreement_hdbscan_th30_d20.xlsx
 RESULTS/agreement/agreement_hdbscan_th30_d20_climat.xlsx
 ```
 
-These files contain the model-by-model trajectory labels and agreement summaries. The sheet `TOA matrix and agreement` includes the article URL, publication date, first topic information, one trajectory column per embedding model, and agreement counts such as `toa_agreement` and `num_toa`.
+These workbooks contain the model-by-model trajectory labels and agreement summaries. The sheet `TOA matrix and agreement` includes the article URL, publication date, first-topic information, one trajectory column per embedding model, and agreement counts such as TOA vote counts and publication-time outlier vote counts.
 
-### SHAP interpretation workbooks in `RESULTS/`
+### SHAP interpretation workbooks
 
 ```text
 RESULTS/hydronewsfr/hydronewsfr_interpretability_k440_xgboost.xlsx
 RESULTS/climatenewsfr/climatenewsfr_interpretability_k660_xgboost.xlsx
 ```
 
-These workbooks explain out-of-fold XGBoost predictions for the selected agreement thresholds: `k=4` for HYDRONEWSFR and `k=6` for CLIMATENEWSFR.
+The filename tag encodes the selected diagonal agreement rule:
 
-They contain:
+- `k440`: `outlier_k=4`, `toa_k=4`, `toa_max_neg=0`;
+- `k660`: `outlier_k=6`, `toa_k=6`, `toa_max_neg=0`.
 
-- `xgb_global_shap`: global feature importance, mean SHAP values, feature-value summaries, and Spearman correlations between feature values and SHAP contributions;
+Each workbook contains three sheets:
+
+- `xgb_global_shap`: global feature importance and direction diagnostics;
 - `xgb_local_predictions`: out-of-fold predicted probabilities for individual articles;
-- `xgb_local_shap_long`: article-feature-level SHAP contributions;
-- `xgb_local_topk_per_article`: strongest local explanations per article;
-- `xgb_shap_foldwise`: fold-level SHAP importance;
-- `xgb_shap_stability`: stability of important features across folds.
+- `xgb_local_shap_long`: article-feature-level SHAP contributions.
 
 ### Appendix files
 
-`APPENDIX/ml_feature_glossary.xlsx` provides the feature glossary. Additional appendix workbooks are placed under `APPENDIX/additional_experiments/`.
+`APPENDIX/ml_feature_glossary.xlsx` provides the released feature glossary. Additional robustness and correlation tables are in `APPENDIX/additional_experiments/`.
 
 ## Raw data and redistribution
 
-The original article text, collection files, and raw social-media traces are not redistributed in this repository. They may be subject to publisher, API, or platform restrictions.
+The original article text, collection files, raw social-media traces, and some embedding caches are not redistributed because they may be subject to publisher, API, or platform restrictions.
 
-The released article-level workbooks provide URLs, labels, and features. This allows the modeling results to be inspected and rerun while avoiding redistribution of restricted raw content. The full pipeline can still be applied to any local corpus that follows the schemas in `DOCS/TABLE_SCHEMAS.md`.
+The released feature matrices provide URLs, consensus labels, and engineered features. They support inspection and supervised-stage reruns without redistributing restricted raw content. The full pipeline can be applied to a new local corpus that follows the schemas in `DOCS/TABLE_SCHEMAS.md`.
 
 ## Installation
 
@@ -167,129 +173,7 @@ python -m spacy download fr_core_news_md
 
 The French spaCy model is used for named-entity features. If it is not installed, named-entity counts are set to zero by the feature script.
 
-## Running the full workflow on a new corpus
-
-Copy the example configuration and edit the local input paths:
-
-```bash
-cp CONFIG/config.example.yaml CONFIG/my_corpus.yaml
-```
-
-At minimum, the article table should contain:
-
-- a stable article identifier or canonical URL;
-- a publication date;
-- a title;
-- a lead paragraph, description, or body-text field.
-
-Social-sharing data are optional. If no sharing file is provided, social features are filled with zeros.
-
-Run the full sequence:
-
-```bash
-bash run_all.sh CONFIG/my_corpus.yaml
-```
-
-The example configuration assumes local private inputs under `DATA/private/`. Those files are not included in the repository.
-
-## Pipeline scripts
-
-### 0. Validate inputs
-
-```bash
-python SCRIPTS/00_validate_inputs.py --config CONFIG/my_corpus.yaml
-```
-
-Checks required columns, date parsing, optional social-sharing data, and configured embedding files.
-
-### 1. Dynamic topic reconstruction
-
-```bash
-python SCRIPTS/01_dynamic_topic_reconstruction.py --config CONFIG/my_corpus.yaml
-```
-
-Builds cumulative daily topic snapshots for each embedding model. The output for each model is:
-
-```text
-RESULTS/<corpus>/models/<model>/results.csv
-```
-
-This file contains article assignments, aligned topic IDs, UMAP coordinates, outlier indicators, and HDBSCAN outlier scores.
-
-### 2. Trajectory annotation matrix
-
-```bash
-python SCRIPTS/02_trajectory_annotation_matrix.py \
-  --config CONFIG/my_corpus.yaml \
-  --output RESULTS/my_corpus/trajectory_matrix.xlsx
-```
-
-Builds the model-by-model article trajectory matrix.
-
-### 3. Agreement and consensus labels
-
-```bash
-python SCRIPTS/03_calculate_agreement.py \
-  --matrix RESULTS/my_corpus/trajectory_matrix.xlsx \
-  --max-k 11 \
-  --toa-max-neg 0 \
-  --output RESULTS/my_corpus/agreement_labels.xlsx
-```
-
-For a threshold `k`, positive cases require at least `k` anticipatory votes. In the paper setting, negative cases require publication-time outlier support and zero anticipatory votes.
-
-### 4. Publication-time features
-
-```bash
-python SCRIPTS/04_create_features_long_tables.py --config CONFIG/my_corpus.yaml
-```
-
-Creates article-model-level geometric features and article-level text/social features. The main outputs are:
-
-```text
-RESULTS/<corpus>/feature_long_model_level.csv
-RESULTS/<corpus>/feature_article_level.csv
-```
-
-### 5. Export supervised feature matrix
-
-```bash
-python SCRIPTS/05_export_feature_matrix.py \
-  --features RESULTS/my_corpus/feature_article_level.csv \
-  --labels RESULTS/my_corpus/agreement_labels.xlsx \
-  --id-col media_url \
-  --max-k 11 \
-  --output RESULTS/my_corpus/article_url_target_features_all_k.xlsx
-```
-
-Exports the article URL, target, agreement threshold, and feature table used for supervised learning.
-
-### 6. Machine-learning experiments
-
-```bash
-python SCRIPTS/06_run_ml_experiments.py \
-  --feature-matrix RESULTS/my_corpus/article_url_target_features_all_k.xlsx \
-  --thresholds 1 2 3 4 5 6 7 8 \
-  --output RESULTS/my_corpus/results.xlsx
-```
-
-Runs the classifiers, baselines, and ablations. The output workbook contains cross-validated F1, precision, recall, average precision, ROC AUC, and standard deviations.
-
-### 7. SHAP interpretation
-
-```bash
-python SCRIPTS/07_shap_oof_interpretation.py \
-  --feature-matrix RESULTS/my_corpus/article_url_target_features_all_k.xlsx \
-  --agreement-k 4 \
-  --dataset-name MyCorpus \
-  --output RESULTS/my_corpus/interpretability_k440_xgboost.xlsx
-```
-
-Computes global and local SHAP explanations from out-of-fold XGBoost predictions.
-
-## Rerunning the supervised stage from the released feature matrices
-
-The feature matrices in `DATA/` can be used directly with scripts 6 and 7.
+## Rerun the supervised stage from the released feature matrices
 
 HYDRONEWSFR:
 
@@ -321,13 +205,42 @@ python SCRIPTS/07_shap_oof_interpretation.py \
   --output RESULTS/climatenewsfr/climatenewsfr_interpretability_k660_xgboost_rerun.xlsx
 ```
 
+Because the estimators use stochastic components, rerun values may differ slightly from the released workbooks even with `random_state=42`. The expected structure is one `ml_metrics_with_ablation` sheet for ML results and three SHAP sheets for interpretation.
+
+## Run the workflow on a new local corpus
+
+Copy the example configuration and edit the local paths:
+
+```bash
+cp CONFIG/config.example.yaml CONFIG/my_corpus.yaml
+```
+
+At minimum, the article table should contain a stable article identifier or canonical URL, a publication date, a title, and a lead/body-text field. Social-sharing data are optional; if no sharing file is provided, social features are filled with zeros.
+
+Run the full sequence:
+
+```bash
+bash run_all.sh CONFIG/my_corpus.yaml
+```
+
+The example configuration assumes private local inputs under `DATA/private/`. Those files are not included in this repository.
+
+## Pipeline scripts
+
+1. `00_validate_inputs.py`: checks required columns, date parsing, optional social-sharing data, and configured embedding files.
+2. `01_dynamic_topic_reconstruction.py`: builds cumulative daily topic snapshots for each embedding model.
+3. `02_trajectory_annotation_matrix.py`: builds the model-by-model article trajectory matrix.
+4. `03_calculate_agreement.py`: creates consensus labels for thresholds `k`.
+5. `04_create_features_long_tables.py`: creates publication-time geometric, text, and social features.
+6. `05_export_feature_matrix.py`: exports the shareable article-threshold feature matrix.
+7. `06_run_ml_experiments.py`: runs classifiers, the `baseline_all_pos` baseline, and the released feature-family ablations.
+8. `07_shap_oof_interpretation.py`: computes global and local out-of-fold SHAP explanations for XGBoost.
+
 ## Main experimental settings
 
-The paper uses cumulative daily snapshots, UMAP with 20 dimensions, HDBSCAN clustering, centroid-based topic alignment with threshold `0.30`, and an ensemble of embedding models. The supervised task is evaluated at publication time.
+The paper setting uses cumulative daily snapshots, UMAP with 20 dimensions, HDBSCAN clustering, centroid-based topic alignment with threshold `0.30`, and an ensemble of embedding models. The supervised task is evaluated at publication time.
 
-The main agreement thresholds are:
+The main selected agreement thresholds are:
 
-- HYDRONEWSFR: `k=4`
-- CLIMATENEWSFR: `k=6`
-
-Exact numerical reproduction depends on the same raw corpus, cached embeddings, package versions (cf. requirements.txt), preprocessing choices, and random seed. The default random seed is `42`. 
+- HYDRONEWSFR: `outlier_k=4`, `toa_k=4`, `toa_max_neg=0`;
+- CLIMATENEWSFR: `outlier_k=6`, `toa_k=6`, `toa_max_neg=0`.
