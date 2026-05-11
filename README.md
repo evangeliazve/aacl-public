@@ -84,7 +84,6 @@ Each workbook has a `feature_matrix` sheet. The main columns are:
 - `n_models_present`: number of embedding-model representations available for the article;
 - geometric, text, and social features used in the supervised experiments.
 
-The HYDRONEWSFR table contains 3,338 rows and 55 columns. The CLIMATENEWSFR table contains 6,501 rows and 55 columns.
 
 ### Machine-learning results in `RESULTS/`
 
