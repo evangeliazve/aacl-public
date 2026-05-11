@@ -4,8 +4,6 @@ This repository accompanies the EMNLP submission **Can Topic-Model Outliers Pred
 
 It contains the scripts, feature tables, agreement tables, machine-learning results, and interpretation workbooks used to reproduce the analysis on a new news corpus and to inspect the reported experiments.
 
-The central question is whether articles that are outliers at publication time can be recognized as early signals of topics that form later. The workflow reconstructs topic trajectories over cumulative daily snapshots, assigns article-level trajectory labels, computes agreement across embedding models, builds publication-time features, trains classifiers, and explains the out-of-fold XGBoost predictions with SHAP.
-
 ## What is in the repository?
 
 The repository is organized around three kinds of material.
