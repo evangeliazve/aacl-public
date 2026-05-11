@@ -330,4 +330,4 @@ The main agreement thresholds are:
 - HYDRONEWSFR: `k=4`
 - CLIMATENEWSFR: `k=6`
 
-Exact numerical reproduction depends on the same raw corpus, cached embeddings, package versions, preprocessing choices, and random seed. The default random seed is `42`. For API-based embeddings, cached embedding files should be used rather than regenerated.
+Exact numerical reproduction depends on the same raw corpus, cached embeddings, package versions (cf. requirements.txt), preprocessing choices, and random seed. The default random seed is `42`. 
