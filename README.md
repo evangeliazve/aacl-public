@@ -1,20 +1,18 @@
-# Can Topic-Model Outliers Predict Future Topics? 
-A Prospective Study of Weak Signals in Embedding Space
+# Can Topic-Model Outliers Predict Future Topics?
 
-This repository accompany our submission to EMNLP 2026.
+A prospective study of weak signals in embedding space.
 
-It contains Python scripts for reproducing the experiments on a new news corpus. 
-The workflow reconstructs dynamic topics from cumulative daily snapshots, derives trajectory-based labels, creates publication-time features, runs supervised models, exports SHAP interpretation tables.
+This repository accompanies the EMNLP submission. It contains the scripts and review workbooks needed to reproduce the paper workflow on a new news corpus and to inspect the article-level feature/target tables used in the reported experiments.
 
-## Repository layout
+The main pipeline reconstructs cumulative dynamic topics, derives trajectory-based labels, calculates cross-model agreement, creates publication-time features, runs supervised models, and exports out-of-fold SHAP interpretation tables.
+
+## Repository structure
 
 ```text
-config/
-  config.example.yaml              # edit this for a new corpus
-data/
-  README.md                        # where to place local/private data
-  toy/                             # tiny schema example, not for metrics
-scripts/
+CONFIG/
+  config.example.yaml
+
+SCRIPTS/
   00_validate_inputs.py
   01_dynamic_topic_reconstruction.py
   02_trajectory_annotation_matrix.py
@@ -23,44 +21,62 @@ scripts/
   05_export_feature_matrix.py
   06_run_ml_experiments.py
   07_shap_oof_interpretation.py
-  08_make_plots.py
-  09_chronological_robustness_check.py
-docs/
+
+DOCS/
   TABLE_SCHEMAS.md
+
+DATA/
+  README.md
+  climatenewsfr_article-url_target_features_all_k.xlsx
+  hydronewsfr_article-url_target_features_all_k.xlsx
+
+RESULTS/
+  agreement/
+    agreement_hdbscan_th30_d20.xlsx
+    agreement_hdbscan_th30_d20_climat.xlsx
+  climatenewsfr/
+    climatenewsfr_results.xlsx
+    climatenewsfr_interpretability_k660_xgboost.xlsx
+  hydronewsfr/
+    hydronewsfr_results.xlsx
+    hydronewsfr_interpretability_k440_xgboost.xlsx
+
+APPENDIX/
+  ml_feature_glossary.xlsx
+  additional_experiments/
+    climatenewsfr_toa_correlations_by_model.xlsx
+    hydronewsfr_toa_correlations_by_model.xlsx
+    hydronewsfr_extended_results.xlsx
+    hydronewsfr_extended_chronological_eval_k440.xlsx
+
 requirements.txt
 environment.yml
 run_all.sh
-LICENSE
-CITATION.cff
-outputs/
+README.md
 ```
 
-## Input data expected for a new corpus
+## What is included
 
-At minimum, provide one article table with:
+`DATA/` contains the shareable article-level workbooks used for review. These include article URLs, agreement thresholds, target labels, and final model features. They allow reviewers to inspect which URLs enter the supervised experiments and to rerun the modeling and interpretation stages.
 
-- one stable article identifier or URL;
-- publication date;
-- title;
-- lead paragraph, description, or body text.
+`RESULTS/` contains aggregate model results, agreement matrices, and SHAP interpretation workbooks corresponding to the paper experiments.
 
-Social-sharing data are optional. If missing, all social features are set to zero. See `docs/TABLE_SCHEMAS.md` for the full schema.
+`APPENDIX/` contains the feature glossary and additional appendix workbooks, including correlation diagnostics and the extended hydrogen chronological robustness output.
 
-Raw news articles and social traces may be subject to licensing, platform, or publisher restrictions. 
-Thus, we provide only the article URLS, and aggregated level data used in the training by k (labels and features by artciles)
+Raw article text, raw collection files, and raw social-media traces are not redistributed here because they may be subject to publisher, API, or platform restrictions. The scripts support reproduction on a local corpus with the schema documented in `DOCS/TABLE_SCHEMAS.md`.
 
 ## Setup
+
+Using a virtual environment:
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-python -m spacy download fr_core_news_md   # optional but recommended for French NER
+python -m spacy download fr_core_news_md
 ```
 
-For local embedding models, the scripts use `sentence-transformers`. For API-based embedding models, keep API calls outside this repository or provide precomputed embeddings as `data/embeddings/<short_name>.npy` or `.csv`. The scripts do not store keys and expect credentials to be managed through environment variables or external preprocessing.
-
-Alternatively, with Conda/Mamba:
+Using Conda or Mamba:
 
 ```bash
 mamba env create -f environment.yml
@@ -68,138 +84,188 @@ conda activate topic-outlier-reproduction
 python -m spacy download fr_core_news_md
 ```
 
-## Configure a run
+The French spaCy model is recommended for named-entity features. If it is not installed, the feature script falls back to zero named-entity counts.
 
-Copy and edit the example config:
+## Reproducing the full pipeline on a new corpus
 
-```bash
-cp config/config.example.yaml config/my_corpus.yaml
-```
-
-Important fields:
-
-- `input.articles`: CSV/XLSX article file.
-- `input.shares`: optional CSV/XLSX social-sharing file.
-- `input.article_id_col`: article ID or canonical URL column.
-- `input.date_col`: publication date column.
-- `embedding.models`: embedding models to run or match to precomputed embedding files.
-- `output_dir`: destination for all intermediate and final outputs.
-
-## One-command run
-
-After editing the config, the full main pipeline can be run with:
+Copy the example configuration and edit the input paths:
 
 ```bash
-bash run_all.sh config/my_corpus.yaml
+cp CONFIG/config.example.yaml CONFIG/my_corpus.yaml
 ```
 
-## End-to-end workflow
+At minimum, the article table must contain:
+
+- a stable article identifier or canonical URL;
+- a publication date;
+- a title;
+- a lead paragraph, description, or body-text field.
+
+Social-sharing data are optional. If the configured sharing file is missing, social features are zero-filled.
+
+Run the full script sequence:
+
+```bash
+bash run_all.sh CONFIG/my_corpus.yaml
+```
+
+The example config assumes local private inputs under `DATA/private/`. These files are intentionally not included in the public repository.
+
+## Script sequence
 
 ### 0. Validate inputs
 
 ```bash
-python scripts/00_validate_inputs.py --config config/my_corpus.yaml
+python SCRIPTS/00_validate_inputs.py --config CONFIG/my_corpus.yaml
 ```
 
-This checks that required article columns, date parsing, optional social-sharing columns, and configured precomputed embeddings are available.
+Checks required columns, date parsing, optional social-sharing overlap, and configured precomputed embeddings.
 
 ### 1. Dynamic topic reconstruction
 
 ```bash
-python scripts/01_dynamic_topic_reconstruction.py --config config/my_corpus.yaml
+python SCRIPTS/01_dynamic_topic_reconstruction.py --config CONFIG/my_corpus.yaml
 ```
 
-This creates one folder per embedding model under `outputs/<corpus>/models/<model>/` and writes `results.csv` for each model. These files contain cumulative snapshot assignments, topic IDs after alignment, UMAP coordinates, and HDBSCAN outlier scores.
+For each embedding model, this writes:
+
+```text
+RESULTS/<corpus>/models/<model>/results.csv
+```
+
+The file contains cumulative snapshot assignments, aligned topic IDs, UMAP coordinates, HDBSCAN outlier indicators, and outlier scores.
 
 ### 2. Trajectory annotation matrix
 
 ```bash
-python scripts/02_trajectory_annotation_matrix.py \
-  --config config/my_corpus.yaml \
-  --output outputs/my_corpus/trajectory_matrix.xlsx
+python SCRIPTS/02_trajectory_annotation_matrix.py \
+  --config CONFIG/my_corpus.yaml \
+  --output RESULTS/my_corpus/trajectory_matrix.xlsx
 ```
 
-This converts each model-specific `results.csv` into article-level trajectory votes and a wide agreement matrix.
+Builds the model-by-model trajectory matrix used for agreement and label reconstruction.
 
 ### 3. Agreement and consensus labels
 
 ```bash
-python scripts/03_calculate_agreement.py \
-  --matrix outputs/my_corpus/trajectory_matrix.xlsx \
-  --max-k 8 \
+python SCRIPTS/03_calculate_agreement.py \
+  --matrix RESULTS/my_corpus/trajectory_matrix.xlsx \
+  --max-k 11 \
   --toa-max-neg 0 \
-  --output outputs/my_corpus/agreement_labels.xlsx
+  --output RESULTS/my_corpus/agreement_labels.xlsx
 ```
 
-For each threshold `k`, positives require at least `k` anticipatory votes, negatives require outlier support and zero anticipatory votes, and uncertain cases are excluded from supervised training.
+For each agreement threshold `k`, positives require at least `k` anticipatory votes. Negatives require publication-time outlier support and zero anticipatory votes in the paper setting.
 
 ### 4. Publication-time features and long tables
 
 ```bash
-python scripts/04_create_features_long_tables.py --config config/my_corpus.yaml
+python SCRIPTS/04_create_features_long_tables.py --config CONFIG/my_corpus.yaml
 ```
 
 Outputs:
 
-- `feature_long_model_level.csv`: model-level publication-time geometry plus article-level text/social features.
-- `feature_article_level.csv`: article-level feature table after aggregating geometric values across models with mean, median, and standard deviation.
-
-### 5. Export review feature matrix
-
-```bash
-python scripts/05_export_feature_matrix.py \
-  --features outputs/my_corpus/feature_article_level.csv \
-  --labels outputs/my_corpus/agreement_labels.xlsx \
-  --id-col media_url \
-  --max-k 8 \
-  --output outputs/my_corpus/article-url_target_features_all_k.xlsx
+```text
+RESULTS/<corpus>/feature_long_model_level.csv
+RESULTS/<corpus>/feature_article_level.csv
 ```
 
-The exported workbook contains the same type of table used for review: `article_url`, `agreement_k`, `label_TOA`, and the final model features.
+Geometric features are computed at article-model level and aggregated across embedding models. Text and social features are article-level.
+
+### 5. Export supervised feature matrix
+
+```bash
+python SCRIPTS/05_export_feature_matrix.py \
+  --features RESULTS/my_corpus/feature_article_level.csv \
+  --labels RESULTS/my_corpus/agreement_labels.xlsx \
+  --id-col media_url \
+  --max-k 11 \
+  --output RESULTS/my_corpus/article_url_target_features_all_k.xlsx
+```
+
+Exports the shareable supervised-learning table with URL, threshold, target, and final features.
 
 ### 6. Supervised ML experiments
 
 ```bash
-python scripts/06_run_ml_experiments.py \
-  --feature-matrix outputs/my_corpus/article-url_target_features_all_k.xlsx \
+python SCRIPTS/06_run_ml_experiments.py \
+  --feature-matrix RESULTS/my_corpus/article_url_target_features_all_k.xlsx \
   --thresholds 1 2 3 4 5 6 7 8 \
-  --output outputs/my_corpus/results.xlsx
+  --output RESULTS/my_corpus/results.xlsx
 ```
 
-The script evaluates Logistic Regression, Linear SVC, Decision Tree, Random Forest, XGBoost, and constant baselines. It also runs feature-family ablations.
+Evaluates Logistic Regression, Linear SVC, Decision Tree, Random Forest, XGBoost, constant baselines, and feature-family ablations.
 
-### 7. SHAP interpretation with out-of-fold local explanations
+### 7. SHAP interpretation with out-of-fold predictions
 
 ```bash
-python scripts/07_shap_oof_interpretation.py \
-  --feature-matrix outputs/my_corpus/article-url_target_features_all_k.xlsx \
+python SCRIPTS/07_shap_oof_interpretation.py \
+  --feature-matrix RESULTS/my_corpus/article_url_target_features_all_k.xlsx \
   --agreement-k 4 \
   --dataset-name MyCorpus \
-  --output outputs/my_corpus/interpretability_k440_xgboost.xlsx
+  --output RESULTS/my_corpus/interpretability_k440_xgboost.xlsx
 ```
 
-Use the selected `k` for the corpus. The output workbook contains global SHAP rankings, out-of-fold local predictions, long SHAP values, top-k local explanations per article, and foldwise SHAP summaries.
+Use the selected corpus-specific agreement threshold. The hydrogen main setting uses `k=4`; the climate main setting uses `k=6`.
 
+## Rerunning only the supervised stage from the shared workbooks
 
-## Reproducing the paper settings
+The shared feature matrices in `DATA/` can be used directly for scripts 6 and 7.
 
-The paper setting uses cumulative daily snapshots, UMAP with 20 dimensions, HDBSCAN clustering, centroid alignment threshold `0.30`, and an embedding-model ensemble. 
-Main supervised settings are `k=4` for the hydrogen corpus and `k=6` for the climate corpus. Howver this can vary
+Hydrogen example:
 
-## Expected outputs
+```bash
+python SCRIPTS/06_run_ml_experiments.py \
+  --feature-matrix DATA/hydronewsfr_article-url_target_features_all_k.xlsx \
+  --thresholds 1 2 3 4 5 6 7 8 \
+  --output RESULTS/hydronewsfr/hydronewsfr_results_rerun.xlsx
+
+python SCRIPTS/07_shap_oof_interpretation.py \
+  --feature-matrix DATA/hydronewsfr_article-url_target_features_all_k.xlsx \
+  --agreement-k 4 \
+  --dataset-name hydronewsfr \
+  --output RESULTS/hydronewsfr/hydronewsfr_interpretability_k440_xgboost_rerun.xlsx
+```
+
+Climate example:
+
+```bash
+python SCRIPTS/06_run_ml_experiments.py \
+  --feature-matrix DATA/climatenewsfr_article-url_target_features_all_k.xlsx \
+  --thresholds 1 2 3 4 5 6 7 8 \
+  --output RESULTS/climatenewsfr/climatenewsfr_results_rerun.xlsx
+
+python SCRIPTS/07_shap_oof_interpretation.py \
+  --feature-matrix DATA/climatenewsfr_article-url_target_features_all_k.xlsx \
+  --agreement-k 6 \
+  --dataset-name climatenewsfr \
+  --output RESULTS/climatenewsfr/climatenewsfr_interpretability_k660_xgboost_rerun.xlsx
+```
+
+## Paper settings
+
+The main paper setting uses cumulative daily snapshots, UMAP with 20 dimensions, HDBSCAN clustering, centroid alignment threshold `0.30`, and an ensemble of embedding models. The supervised task is evaluated at publication time (`TA`).
+
+Main agreement thresholds:
+
+- HYDRONEWSFR: `k=4`
+- CLIMATENEWSFR: `k=6`
+
+The extended hydrogen chronological robustness output is included under `APPENDIX/additional_experiments/`.
+
+## Expected outputs from a new run
 
 ```text
-outputs/<corpus>/models/<model>/results.csv
-outputs/<corpus>/trajectory_matrix.xlsx
-outputs/<corpus>/agreement_labels.xlsx
-outputs/<corpus>/feature_long_model_level.csv
-outputs/<corpus>/feature_article_level.csv
-outputs/<corpus>/article-url_target_features_all_k.xlsx
-outputs/<corpus>/results.xlsx
-outputs/<corpus>/interpretability_k*_xgboost.xlsx
-
+RESULTS/<corpus>/models/<model>/results.csv
+RESULTS/<corpus>/trajectory_matrix.xlsx
+RESULTS/<corpus>/agreement_labels.xlsx
+RESULTS/<corpus>/feature_long_model_level.csv
+RESULTS/<corpus>/feature_article_level.csv
+RESULTS/<corpus>/article_url_target_features_all_k.xlsx
+RESULTS/<corpus>/results.xlsx
+RESULTS/<corpus>/interpretability_k*_xgboost.xlsx
 ```
 
-## Notes on reproducibility
+## Reproducibility notes
 
-- `random_state` defaults to `42`.
+`random_state` defaults to `42`. Exact numerical reproduction requires the same raw corpus, cached embeddings, package versions, preprocessing choices, and configuration. API-based embeddings should be provided as precomputed files rather than regenerated during review.
