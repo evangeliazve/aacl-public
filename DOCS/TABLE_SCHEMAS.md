@@ -181,27 +181,27 @@ Produced by `05_export_feature_matrix.py`. This is the main shareable supervised
 
 ## 9. ML results (`results.xlsx`)
 
-Produced by `06_run_ml_experiments.py`.
+Produced by `06_run_ml_experiments.py`. The released matrices support the diagonal agreement settings `outlier_k = toa_k = agreement_k`, with `toa_max_neg = 0`.
 
 ### Sheet: `ml_metrics_with_ablation`
 
 | Column | Type | Description |
 |---|---|---|
 | `horizon` | string | Prediction horizon; default `TA`. |
-| `outlier_maj` | integer | Outlier consensus threshold. |
-| `toa_min_pos` | integer | TOA positive-vote threshold. |
+| `outlier_k` | integer | Publication-time outlier consensus threshold. In the released reruns, this equals `agreement_k`. |
+| `toa_k` | integer | TOA positive-vote threshold. In the released reruns, this equals `agreement_k`. |
 | `toa_max_neg` | integer | Maximum TOA votes for negatives. |
 | `cv_n_splits` | integer | Number of CV folds. |
-| `clf_name` | string | Classifier or baseline. |
-| `ablation` | string | Feature subset. |
+| `clf_name` | string | Classifier or baseline: `xgb`, `rf`, `logreg`, `linear_svc`, `dt`, or `baseline_all_pos`. |
+| `ablation` | string | Feature subset: `all_features`, `no_geom`, `no_social`, `no_text`, `only_geom`, `only_social`, or `only_text`. `n/a` for the baseline. |
 | `n_articles` | integer | Number of retained labeled articles. |
 | `n_pos_articles_est` | integer | Number of positives. |
 | `n_neg_articles_est` | integer | Number of negatives. |
 | `F1_mean`, `F1_std` | numeric | Fold mean and standard deviation. |
 | `Precision_mean`, `Precision_std` | numeric | Fold mean and standard deviation. |
 | `Recall_mean`, `Recall_std` | numeric | Fold mean and standard deviation. |
-| `AveragePrecision_mean`, `AveragePrecision_std` | numeric | Additional diagnostic metric. |
-| `ROCAUC_mean`, `ROCAUC_std` | numeric | Additional diagnostic metric. |
+| `AP_mean`, `AP_std` | numeric | Average precision fold mean and standard deviation. |
+| `ROC_AUC_mean`, `ROC_AUC_std` | numeric | ROC AUC fold mean and standard deviation. |
 
 ## 10. SHAP interpretation workbook
 
@@ -212,8 +212,6 @@ Produced by `07_shap_oof_interpretation.py`.
 | `xgb_global_shap` | Global feature ranking by mean absolute SHAP value, with Spearman direction diagnostics. |
 | `xgb_local_predictions` | Out-of-fold article predictions. |
 | `xgb_local_shap_long` | Long table of local SHAP values for every article-feature pair. |
-| `xgb_local_topk_per_article` | Top local drivers by article. |
-| `xgb_shap_foldwise` | Foldwise SHAP rankings for stability checks. |
 
 ## 11. Recommended embedding ensemble
 
