@@ -98,7 +98,7 @@ def load_or_compute_embeddings(df: pd.DataFrame, model_cfg: Dict[str, Any], cfg:
     if model_cfg.get("type") != "sentence_transformer":
         raise ValueError(
             f"No precomputed embeddings found for {short}. "
-            "For API-based models, create data/embeddings/<short_name>.npy or .csv first."
+            "For API-based models, create DATA/private/embeddings/<short_name>.npy or .csv first, or set embedding.precomputed_dir in CONFIG/config.example.yaml."
         )
     from sentence_transformers import SentenceTransformer
 

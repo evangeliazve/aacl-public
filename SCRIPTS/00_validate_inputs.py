@@ -79,7 +79,7 @@ def validate_shares(cfg: dict, articles: pd.DataFrame) -> None:
 
 def validate_embeddings(cfg: dict, articles: pd.DataFrame) -> None:
     emb = cfg.get('embedding', {})
-    precomputed_dir = Path(emb.get('precomputed_dir', 'data/embeddings'))
+    precomputed_dir = Path(emb.get('precomputed_dir', 'DATA/private/embeddings'))
     models = emb.get('models', [])
     if not models:
         raise ValueError('embedding.models is empty')
