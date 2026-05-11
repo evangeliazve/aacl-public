@@ -5,15 +5,15 @@ project_name: sample_news_corpus
 random_state: 42
 
 input:
-  articles: data/articles.csv
-  shares: data/social_shares.csv   # optional; leave empty or omit if unavailable
+  articles: DATA/private/articles.csv
+  shares: DATA/private/social_shares.csv
   article_id_col: media_url
   date_col: publication_date_cleaned
   title_col: title
   text_col: description
   url_col: media_url
 
-output_dir: outputs/sample_news_corpus
+output_dir: RESULTS/sample_news_corpus
 
 embedding:
   # Local SentenceTransformer models are run directly. API models are expected as precomputed embeddings.
@@ -25,7 +25,7 @@ embedding:
     - name: sentence-transformers/paraphrase-multilingual-mpnet-base-v2
       short_name: mpnet
       type: sentence_transformer
-  precomputed_dir: data/embeddings   # optional, one .npy/.csv per short_name
+  precomputed_dir: DATA/private/embeddings   # optional, one .npy/.csv per short_name
   text_template: "{title} {description}"
 
 clustering:
