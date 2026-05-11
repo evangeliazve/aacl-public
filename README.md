@@ -1,8 +1,10 @@
-# Predicting anticipatory topic outliers
+# Can Topic-Model Outliers Predict Future Topics? 
+A Prospective Study of Weak Signals in Embedding Space
 
-This repository contains standalone Python scripts for reproducing the article-level experiments on a new news corpus. The workflow reconstructs dynamic topics from cumulative daily snapshots, derives trajectory-based labels, creates publication-time features, runs supervised models, exports SHAP interpretation tables, creates plots, and runs the appendix chronological robustness check.
+This repository accompany our submission to EMNLP 2026.
 
-The code is intentionally script-based. It is not a Python package and does not require installation with `pip install -e .`.
+It contains Python scripts for reproducing the experiments on a new news corpus. 
+The workflow reconstructs dynamic topics from cumulative daily snapshots, derives trajectory-based labels, creates publication-time features, runs supervised models, exports SHAP interpretation tables.
 
 ## Repository layout
 
@@ -44,7 +46,8 @@ At minimum, provide one article table with:
 
 Social-sharing data are optional. If missing, all social features are set to zero. See `docs/TABLE_SCHEMAS.md` for the full schema.
 
-Raw news articles and social traces may be subject to licensing, platform, or publisher restrictions. This repository therefore documents schemas and code paths, but users should provide their own corpus unless redistribution is explicitly allowed.
+Raw news articles and social traces may be subject to licensing, platform, or publisher restrictions. 
+Thus, we provide only the article URLS, and aggregated level data used in the training by k (labels and features by artciles)
 
 ## Setup
 
@@ -89,8 +92,6 @@ After editing the config, the full main pipeline can be run with:
 ```bash
 bash run_all.sh config/my_corpus.yaml
 ```
-
-The chronological appendix check is intentionally not included in `run_all.sh`, because it is a robustness analysis rather than the main result pipeline.
 
 ## End-to-end workflow
 
@@ -179,45 +180,11 @@ python scripts/07_shap_oof_interpretation.py \
 
 Use the selected `k` for the corpus. The output workbook contains global SHAP rankings, out-of-fold local predictions, long SHAP values, top-k local explanations per article, and foldwise SHAP summaries.
 
-### 8. Plots
-
-```bash
-python scripts/08_make_plots.py \
-  --results outputs/my_corpus/results.xlsx \
-  --shap outputs/my_corpus/interpretability_k440_xgboost.xlsx \
-  --dataset-name MyCorpus \
-  --selected-k 4 \
-  --output-dir outputs/my_corpus/plots
-```
-
-### 9. Appendix chronological robustness check
-
-```bash
-python scripts/09_chronological_robustness_check.py \
-  --feature-matrix outputs/my_corpus/article-url_target_features_all_k.xlsx \
-  --articles data/articles.csv \
-  --id-col media_url \
-  --date-col publication_date_cleaned \
-  --thresholds 1 2 3 4 5 6 7 8 \
-  --feature-set geometry_text \
-  --model xgboost \
-  --output outputs/my_corpus/chronological_robustness.xlsx
-```
-
-This evaluates the trained signal under chronological train-before-test folds and exports:
-
-- `chronological_summary`;
-- `chronological_folds`;
-- `chronological_oof_predictions`;
-- `features_used`.
-
-Use `--feature-set geometry_text` for an extended corpus when social features are unavailable over the full period.
 
 ## Reproducing the paper settings
 
-The paper setting uses cumulative daily snapshots, UMAP with 20 dimensions, HDBSCAN clustering, centroid alignment threshold `0.30`, and an embedding-model ensemble. Main supervised settings are `k=4` for the hydrogen corpus and `k=6` for the climate corpus. The broad threshold `k=1` can be used to inspect the coverage-confidence tradeoff.
-
-The appendix robustness check for the extended hydrogen corpus uses the same publication-time prediction setup on a longer chronological window, with the reduced geometry+text feature set when social features are not uniformly available.
+The paper setting uses cumulative daily snapshots, UMAP with 20 dimensions, HDBSCAN clustering, centroid alignment threshold `0.30`, and an embedding-model ensemble. 
+Main supervised settings are `k=4` for the hydrogen corpus and `k=6` for the climate corpus. Howver this can vary
 
 ## Expected outputs
 
@@ -230,19 +197,9 @@ outputs/<corpus>/feature_article_level.csv
 outputs/<corpus>/article-url_target_features_all_k.xlsx
 outputs/<corpus>/results.xlsx
 outputs/<corpus>/interpretability_k*_xgboost.xlsx
-outputs/<corpus>/chronological_robustness.xlsx
-outputs/<corpus>/plots/*.pdf
-outputs/<corpus>/plots/*.png
+
 ```
 
 ## Notes on reproducibility
 
 - `random_state` defaults to `42`.
-- UMAP and HDBSCAN can vary with implementation versions and threading; exact reproduction is strongest with cached embeddings and pinned package versions.
-- Preprocessing, imputation, scaling, and model fitting are done inside each cross-validation fold.
-- Article IDs are used as groups in cross-validation.
-- Linear models use median imputation and standardization.
-- Tree models use median imputation without standardization.
-- XGBoost uses `scale_pos_weight = N_negative / max(N_positive, 1)`.
-- Social features are zero-filled when no publication-time X-sharing trace is observed.
-- API embeddings should be cached before running the pipeline so that the experiments can be rerun without changing representations.
