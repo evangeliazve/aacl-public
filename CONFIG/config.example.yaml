@@ -55,4 +55,6 @@ ml:
   horizon: TA
   cv_folds: 5
   random_state: 42
+  # Released feature matrices contain thresholds 1 through 8.
+  # Script 06 evaluates the diagonal setting outlier_k = toa_k = agreement_k.
   thresholds: [1,2,3,4,5,6,7,8]
