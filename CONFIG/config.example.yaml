@@ -17,7 +17,7 @@ output_dir: RESULTS/sample_news_corpus
 
 embedding:
   # Local SentenceTransformer models are run directly. API models are expected as precomputed embeddings.
-  # Recommended paper ensemble is documented in docs/TABLE_SCHEMAS.md.
+  # Recommended paper ensemble is documented in DOCS/TABLE_SCHEMAS.md.
   models:
     - name: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
       short_name: miniLM
