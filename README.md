@@ -1,6 +1,6 @@
 # Can Topic-Model Outliers Predict Future Topics?
 
-This repository contains results and reproducibility materials for the EMNLP submission **Can Topic-Model Outliers Predict Future Topics? A Prospective Study of Weak Signals in Embedding Space**.
+This repository contains results and reproducibility materials for the EMNLP submission Can Topic-Model Outliers Predict Future Topics? A Prospective Study of Weak Signals in Embedding Space.
 
 It includes the article-level feature matrices used in the supervised experiments, released result workbooks, agreement tables, SHAP interpretation tables, and scripts for rerunning the experiments on other data.
 
