@@ -193,7 +193,7 @@ Produced by `06_run_ml_experiments.py`. The released matrices support the diagon
 | `toa_max_neg` | integer | Maximum TOA votes for negatives. |
 | `cv_n_splits` | integer | Number of CV folds. |
 | `clf_name` | string | Classifier or baseline: `xgb`, `rf`, `logreg`, `linear_svc`, `dt`, or `baseline_all_pos`. |
-| `ablation` | string | Feature subset: `all_features`, `no_geom`, `no_social`, `no_text`, `only_geom`, `only_social`, or `only_text`. `n/a` for the baseline. |
+| `ablation` | string | Feature subset: `all_features`, `no_geom`, `no_social`, `no_text`, `only_geom`, `only_social`, or `only_text`. `baseline` for the baseline. |
 | `n_articles` | integer | Number of retained labeled articles. |
 | `n_pos_articles_est` | integer | Number of positives. |
 | `n_neg_articles_est` | integer | Number of negatives. |
