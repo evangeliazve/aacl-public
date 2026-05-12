@@ -1,10 +1,8 @@
 # Can Topic-Model Outliers Predict Future Topics?
 
-This repository contains the artifact package for the EMNLP submission **Can Topic-Model Outliers Predict Future Topics? A Prospective Study of Weak Signals in Embedding Space**.
+This repository contains results and reproducibility materials for the EMNLP submission **Can Topic-Model Outliers Predict Future Topics? A Prospective Study of Weak Signals in Embedding Space**.
 
-The package includes the article-level feature matrices used in the supervised experiments, the released result workbooks, agreement tables, SHAP interpretation tables, and scripts for rerunning the supervised stage from the released matrices.
-
-The original article text, collection dumps, raw social-media traces, and some embedding caches are not included. The scripts for the earlier pipeline stages are provided so that the workflow can be run on a local corpus with the same schema, but the submitted end-to-end experiments require the private corpus and the same embedding/preprocessing setup.
+It includes the article-level feature matrices used in the supervised experiments, released result workbooks, agreement tables, SHAP interpretation tables, and scripts for rerunning the experiments on other data.
 
 ## Repository structure
 
