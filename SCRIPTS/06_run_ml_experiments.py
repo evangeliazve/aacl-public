@@ -211,7 +211,7 @@ def evaluate_threshold(
         for _, test_idx in splitter.split(X_dummy, y, groups_cv):
             yp = np.full(len(test_idx), constant)
             fold_scores.append(scores(y[test_idx], yp, yp.astype(float)))
-        rows.append(summarize(k, name, ablation="n/a", fold_scores=fold_scores, n_splits=n_splits, y=y))
+        rows.append(summarize(k, name, ablation="baseline", fold_scores=fold_scores, n_splits=n_splits, y=y))
 
     models = make_models(y, random_state)
     for ablation, cols in groups.items():
