@@ -113,7 +113,7 @@ only_social
 only_text
 ```
 
-The baseline row is `baseline_all_pos`. It is reported once per agreement threshold, not once per ablation; its ablation field is `n/a`.
+The baseline row is `baseline_all_pos`. It is reported once per agreement threshold, not once per ablation; its ablation field is `baseline`.
 
 ### Agreement matrices
 
