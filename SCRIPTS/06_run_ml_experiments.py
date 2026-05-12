@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""Run supervised ML experiments and feature-family ablations.
-
-The released feature matrices contain one row per article and agreement threshold.
-This script evaluates the diagonal consensus settings used in the release:
-`outlier_k = toa_k = agreement_k` and `toa_max_neg = 0`.
-"""
+"""Run the supervised classifiers and feature-family ablations."""
 from __future__ import annotations
 
 import argparse
