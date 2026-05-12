@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""Export the shareable feature matrices used in the supervised experiments.
-
-The exported workbook matches the paper/review schema:
-article_url, agreement_k, label_TOA, n_models_present, and the final feature columns.
-"""
+"""Export the article-threshold feature matrix used by the ML scripts."""
 from __future__ import annotations
 
 import argparse
