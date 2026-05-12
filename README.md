@@ -1,13 +1,10 @@
 # Can Topic-Model Outliers Predict Future Topics?
 
-This repository accompanies the EMNLP submission **Can Topic-Model Outliers Predict Future Topics? A Prospective Study of Weak Signals in Embedding Space**.
+This repository contains the artifact package for the EMNLP submission **Can Topic-Model Outliers Predict Future Topics? A Prospective Study of Weak Signals in Embedding Space**.
 
-The release has two purposes:
+The package includes the article-level feature matrices used in the supervised experiments, the released result workbooks, agreement tables, SHAP interpretation tables, and scripts for rerunning the supervised stage from the released matrices.
 
-1. **Inspect the reported artifacts.** The `DATA/`, `RESULTS/`, and `APPENDIX/` folders contain the released feature matrices, agreement tables, ML result workbooks, SHAP workbooks, and appendix tables.
-2. **Rerun the shareable supervised stage.** The released article-level feature matrices can be passed directly to scripts 6 and 7. The original article text, collection dumps, raw social-media traces, and some embedding caches are not redistributed.
-
-The full pipeline scripts are included so that the same workflow can be applied to a new local corpus that follows the schemas in `DOCS/TABLE_SCHEMAS.md`. Exact end-to-end reproduction of the submitted experiments requires the non-redistributed raw corpus and the same embedding/preprocessing setup.
+The original article text, collection dumps, raw social-media traces, and some embedding caches are not included. The scripts for the earlier pipeline stages are provided so that the workflow can be run on a local corpus with the same schema, but the submitted end-to-end experiments require the private corpus and the same embedding/preprocessing setup.
 
 ## Repository structure
 
@@ -146,6 +143,21 @@ Each workbook contains three sheets:
 
 `APPENDIX/ml_feature_glossary.xlsx` provides the released feature glossary. Additional robustness and correlation tables are in `APPENDIX/additional_experiments/`.
 
+## Release sanity checks
+
+The files in this release have the following expected structure:
+
+| File | Expected structure |
+|---|---|
+| `DATA/hydronewsfr_article-url_target_features_all_k.xlsx` | `feature_matrix`, 3,338 rows, `agreement_k` 1–8 |
+| `DATA/climatenewsfr_article-url_target_features_all_k.xlsx` | `feature_matrix`, 6,501 rows, `agreement_k` 1–8 |
+| `RESULTS/hydronewsfr/hydronewsfr_results.xlsx` | `ml_metrics_with_ablation`, 288 rows |
+| `RESULTS/climatenewsfr/climatenewsfr_results.xlsx` | `ml_metrics_with_ablation`, 288 rows |
+| `RESULTS/hydronewsfr/hydronewsfr_interpretability_k440_xgboost.xlsx` | 3 SHAP sheets |
+| `RESULTS/climatenewsfr/climatenewsfr_interpretability_k660_xgboost.xlsx` | 3 SHAP sheets |
+
+The ML result workbooks contain 8 thresholds. For each threshold there is one `baseline_all_pos` row and 35 classifier-ablation rows: 5 classifiers × 7 ablations.
+
 ## Raw data and redistribution
 
 The original article text, collection files, raw social-media traces, and some embedding caches are not redistributed because they may be subject to publisher, API, or platform restrictions.
@@ -234,7 +246,7 @@ The example configuration assumes private local inputs under `DATA/private/`. Th
 5. `04_create_features_long_tables.py`: creates publication-time geometric, text, and social features.
 6. `05_export_feature_matrix.py`: exports the shareable article-threshold feature matrix.
 7. `06_run_ml_experiments.py`: runs classifiers, the `baseline_all_pos` baseline, and the released feature-family ablations.
-8. `07_shap_oof_interpretation.py`: computes global and local out-of-fold SHAP explanations for XGBoost.
+8. `07_shap_oof_interpretation.py`: computes global XGBoost SHAP summaries and out-of-fold local SHAP tables for the selected agreement threshold.
 
 ## Main experimental settings
 
