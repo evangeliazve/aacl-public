@@ -2,7 +2,7 @@
 
 This repository contains results and reproducibility materials for the EMNLP submission: **Can Topic-Model Outliers Predict Future Topics? A Prospective Study of Weak Signals in Embedding Space**.
 
-It includes the article-level feature matrices used in the supervised experiments, released result workbooks, agreement tables, SHAP interpretation tables, and scripts for rerunning the experiments on other data.
+It includes the article-level feature matrices used in the supervised experiments, released result workbooks, agreement tables, SHAP interpretation tables, data-collection scripts, and scripts for rerunning the experiments on other data.
 
 ## Repository structure
 
@@ -25,6 +25,9 @@ DOCS/
 
 DATA/
   README.md
+  collection_scripts/
+    climatenewsfr_data_collection_googlenews.py
+    climatenewsfr_data_collection_X.py
   climatenewsfr_article-url_target_features_all_k.xlsx
   hydronewsfr_article-url_target_features_all_k.xlsx
 
@@ -67,6 +70,16 @@ Each workbook has one sheet, `feature_matrix`. Rows are article-threshold pairs.
 - geometric, text, named-entity, and social/co-sharing features used by scripts 6 and 7.
 
 The released feature matrices contain `agreement_k` values 1 through 8.
+
+
+### Data-collection scripts
+
+```text
+DATA/collection_scripts/climatenewsfr_data_collection_googlenews.py
+DATA/collection_scripts/climatenewsfr_data_collection_X.py
+```
+
+These scripts document the collection procedure used to construct the CLIMATENEWSFR corpus from Google News API results and observed X-sharing activity. They are provided to support reuse of the collection pipeline on new local corpora.
 
 ### Machine-learning result workbooks
 
@@ -160,7 +173,7 @@ The ML result workbooks contain 8 thresholds. For each threshold there is one `b
 
 The original article text, collection files, raw social-media traces, and some embedding caches are not redistributed because they may be subject to publisher, API, or platform restrictions.
 
-The released feature matrices provide URLs, consensus labels, and engineered features. They support inspection and supervised-stage reruns without redistributing restricted raw content. The full pipeline can be applied to a new local corpus that follows the schemas in `DOCS/TABLE_SCHEMAS.md`.
+The released feature matrices provide URLs, consensus labels, and engineered features. They support inspection and supervised-stage reruns without redistributing restricted raw content. The collection and analysis pipeline can be applied to a new local corpus that follows the schemas in `DOCS/TABLE_SCHEMAS.md`.
 
 ## Installation
 
