@@ -106,7 +106,7 @@ The columns include `horizon`, `outlier_k`, `toa_k`, `toa_max_neg`, `cv_n_splits
 The supervised models are:
 
 ```text
-xgb, rf, logreg, linear_svc, dt
+xgb (XGBoost), rf (Random Forest), logreg (Logistic Regression), linear_svc (Linear Support Vector Machine), dt (Decision Tree)
 ```
 
 The released ablations are:
