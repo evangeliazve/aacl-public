@@ -41,6 +41,7 @@ clustering:
 
 labeling:
   recent_cutoff_days: 26
+  warmup_days: 5
   max_k: 11
   selected_k: 4
   toa_max_neg: 0
