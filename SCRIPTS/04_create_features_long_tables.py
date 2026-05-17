@@ -462,9 +462,24 @@ def model_geometric_features(results: pd.DataFrame, cfg: Dict[str, Any]) -> pd.D
         knn_mean, knn_std = knn_density(hist[dim_cols].to_numpy(dtype=float), x, knn_k)
 
         recent_cut = tau - pd.Timedelta(days=outlier_lookback_days)
-        out_recent = hist[hist["__is_outlier__"] & (hist["__time__"] >= recent_cut)]
+        
+        out_recent = hist[
+            hist["__is_outlier__"]
+            & (hist["__time__"] >= recent_cut)
+        ].copy()
+        
+        # Count each recent outlier article only once.
+        # The history/snapshot table can contain repeated cumulative rows
+        # for the same article, so row counts inflate n_recent_outliers.
+        out_recent = (
+            out_recent
+            .sort_values("__time__")
+            .drop_duplicates(id_col, keep="last")
+        )
+        
         has_recent = float(len(out_recent) > 0)
         n_recent = float(len(out_recent))
+      
         if len(out_recent) > 0:
             X_out = out_recent[dim_cols].to_numpy(dtype=float)
             nbrs = NearestNeighbors(n_neighbors=min(proto_k, len(X_out)), metric="euclidean").fit(X_out)
