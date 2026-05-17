@@ -247,7 +247,7 @@ The example configuration assumes private local inputs under `DATA/private/`. Th
 
 ## Main experimental settings
 
-The paper setting uses cumulative daily snapshots, UMAP with 20 dimensions, HDBSCAN clustering, centroid-based topic alignment with threshold `0.30`, and an ensemble of embedding models. The supervised task is evaluated at publication time.
+The paper setting uses cumulative daily snapshots, UMAP with 20 dimensions, HDBSCAN clustering, centroid-based topic alignment with threshold `0.30`, and an ensemble of embedding models. The supervised task is evaluated at publication time. The first `labeling.warmup_days` cumulative snapshots are excluded before trajectory annotation and publication-time feature extraction, matching the notebook warm-up filtering used to avoid unstable early clustering snapshots.
 
 The main selected agreement thresholds are:
 
