@@ -1,5 +1,5 @@
 # Predicting Emerging Topics from Topic-Model Outliers
-## A Prospective Study of Weak Signals in Embedding Space
+### A Prospective Study of Weak Signals in Embedding Space
 
 This repository contains results and reproducibility materials for the EMNLP submission: **Predicting Emerging Topics from Topic-Model Outliers: A Prospective Study of Weak Signals in Embedding Space.
 
