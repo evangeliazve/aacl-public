@@ -25,12 +25,26 @@ def first_topic_creation_time(df: pd.DataFrame) -> pd.Series:
     return assigned.groupby("topic_id")["snapshot_date"].min()
 
 
-def annotate_model(results: pd.DataFrame, id_col: str, date_col: str, model_name: str) -> pd.DataFrame:
+def annotate_model(
+    results: pd.DataFrame,
+    id_col: str,
+    date_col: str,
+    model_name: str,
+    cfg: dict,
+) -> pd.DataFrame:
     df = results.copy()
     df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
     df["snapshot_date"] = pd.to_datetime(df["snapshot_date"], errors="coerce")
     df["topic_id"] = pd.to_numeric(df["topic_id"], errors="coerce").fillna(-1).astype(int)
     df["is_outlier"] = df["is_outlier"].astype(str).str.lower().isin(["true", "1", "yes"])
+
+    # Match the notebook's warm-up filtering: ignore the first N cumulative snapshots
+    # before computing trajectory labels, because the earliest topic snapshots are unstable.
+    warmup_days = int(cfg.get("labeling", {}).get("warmup_days", 0))
+    if warmup_days > 0 and df["snapshot_date"].notna().any():
+        start = df["snapshot_date"].min()
+        cutoff = start + pd.Timedelta(days=warmup_days)
+        df = df[df["snapshot_date"] >= cutoff].copy()
 
     topic_tt = first_topic_creation_time(df)
     rows: List[Dict] = []
@@ -92,7 +106,7 @@ def main() -> None:
     for result_file in sorted((root / "models").glob("*/results.csv")):
         model = result_file.parent.name
         df = pd.read_csv(result_file)
-        matrices.append(annotate_model(df, id_col, date_col, model))
+        matrices.append(annotate_model(df, id_col, date_col, model, cfg))
 
     if not matrices:
         raise FileNotFoundError(f"No results.csv files found below {root / 'models'}")
