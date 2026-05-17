@@ -40,8 +40,8 @@ clustering:
   snapshot_frequency: D
 
 labeling:
+  warmup_days: 10
   recent_cutoff_days: 26
-  warmup_days: 5
   max_k: 11
   selected_k: 4
   toa_max_neg: 0
@@ -49,6 +49,7 @@ labeling:
 features:
   knn_k: 20
   recent_outlier_neighbors: 10
+  outlier_lookback_days: 1000
   use_social: true
   spacy_model: fr_core_news_md
 
