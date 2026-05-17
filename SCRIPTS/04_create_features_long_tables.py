@@ -202,9 +202,19 @@ def social_features(shares: pd.DataFrame | None, articles: pd.DataFrame, cfg: Di
 def publication_time_rows(results: pd.DataFrame, cfg: Dict[str, Any]) -> pd.DataFrame:
     id_col = cfg["input"]["article_id_col"]
     date_col = cfg["input"]["date_col"]
+    warmup_days = int(cfg.get("labeling", {}).get("warmup_days", 0))
+
     df = results.copy()
     df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
     df["snapshot_date"] = pd.to_datetime(df["snapshot_date"], errors="coerce")
+
+    # Match the notebook's warm-up filtering: ignore the first N cumulative snapshots
+    # before selecting publication-time feature rows.
+    if warmup_days > 0 and df["snapshot_date"].notna().any():
+        start = df["snapshot_date"].min()
+        cutoff = start + pd.Timedelta(days=warmup_days)
+        df = df[df["snapshot_date"] >= cutoff].copy()
+
     df = df[df["snapshot_date"] >= df[date_col]].sort_values([id_col, "snapshot_date"])
     return df.groupby(id_col).head(1).copy()
 
