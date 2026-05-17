@@ -103,23 +103,9 @@ toa_max_neg = 0
 
 The columns include `horizon`, `outlier_k`, `toa_k`, `toa_max_neg`, `cv_n_splits`, `clf_name`, `ablation`, `n_articles`, class counts, and fold means/standard deviations for F1, precision, recall, average precision (`AP_*`), and ROC AUC (`ROC_AUC_*`).
 
-The supervised models are:
+The supervised models are abbreviated as follows: `xgb` denotes XGBoost, `rf` Random Forest, `logreg` Logistic Regression, `linear_svc` a linear Support Vector Machine, and `dt` a Decision Tree classifier.
 
-```text
-xgb (XGBoost), rf (Random Forest), logreg (Logistic Regression), linear_svc (Linear Support Vector Machine), dt (Decision Tree)
-```
-
-The released ablations are:
-
-```text
-all_features
-no_geom
-no_social
-no_text
-only_geom
-only_social
-only_text
-```
+The ablation labels describe which feature families are used. `all_features` includes the full set of geometric, textual, and social predictors. `no_geom`, `no_social`, and `no_text` remove one feature family at a time. `only_geom`, `only_social`, and `only_text` keep only the corresponding feature family.
 
 The baseline row is `baseline_all_pos`. It is reported once per agreement threshold, not once per ablation; its ablation field is `baseline`.
 
