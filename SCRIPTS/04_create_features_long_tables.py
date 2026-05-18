@@ -451,7 +451,11 @@ def model_geometric_features(results: pd.DataFrame, cfg: Dict[str, Any]) -> pd.D
     rows: List[Dict[str, Any]] = []
     for _, row in ta.iterrows():
         tau = pd.Timestamp(row["__time__"])
-        hist = df[df["__time__"] <= tau].copy().sort_values("__time__")
+
+        hist_raw = df[df["__time__"] <= tau].copy()
+        hist_raw = hist_raw.sort_values([id_col, "__time__"])
+        hist = hist_raw.groupby(id_col, as_index=False).tail(1).copy()
+
         x = row[dim_cols].to_numpy(dtype=float)
 
         d_sorted = dist_to_centroids(x, centroids(hist, dim_cols))
@@ -462,27 +466,13 @@ def model_geometric_features(results: pd.DataFrame, cfg: Dict[str, Any]) -> pd.D
         knn_mean, knn_std = knn_density(hist[dim_cols].to_numpy(dtype=float), x, knn_k)
 
         recent_cut = tau - pd.Timedelta(days=outlier_lookback_days)
-        
         out_recent = hist[
             hist["__is_outlier__"]
             & (hist["__time__"] >= recent_cut)
         ].copy()
-        
-        # Count each recent outlier article only once.
-        out_recent = (
-            out_recent
-            .sort_values("__time__")
-            .drop_duplicates(id_col, keep="last")
-        )
-        
         has_recent = float(len(out_recent) > 0)
         n_recent = float(len(out_recent))
 
-        #recent_cut = tau - pd.Timedelta(days=outlier_lookback_days)
-        #out_recent = hist[hist["__is_outlier__"] & (hist["__time__"] >= recent_cut)]
-        #has_recent = float(len(out_recent) > 0)
-        #n_recent = float(len(out_recent))
-      
         if len(out_recent) > 0:
             X_out = out_recent[dim_cols].to_numpy(dtype=float)
             nbrs = NearestNeighbors(n_neighbors=min(proto_k, len(X_out)), metric="euclidean").fit(X_out)
