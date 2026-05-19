@@ -505,7 +505,10 @@ def model_geometric_features(results: pd.DataFrame, cfg: Dict[str, Any]) -> pd.D
     ]
     model_col = "model" if "model" in out.columns else "model_name"
     for c in raw_geom:
-        out[c + "_pct"] = out.groupby(model_col)[c].rank(pct=True, method="average")
+        out[c + "_pct"] = (
+            out.groupby(model_col)[c]
+               .transform(lambda s: s.rank(method="average") / (s.notna().sum() + 1.0))
+        )
     out["outlier_score"] = pd.to_numeric(out["outlier_score"], errors="coerce").fillna(0.0)
     return out
 
