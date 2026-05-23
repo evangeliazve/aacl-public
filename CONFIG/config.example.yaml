@@ -40,7 +40,7 @@ clustering:
   snapshot_frequency: D
 
 labeling:
-  warmup_days: 10
+  warmup_days: 5
   recent_cutoff_days: 26
   max_k: 11
   selected_k: 4
