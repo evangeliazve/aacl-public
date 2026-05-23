@@ -253,3 +253,8 @@ The main selected agreement thresholds are:
 
 - HYDRONEWSFR: `outlier_k=4`, `toa_k=4`, `toa_max_neg=0`;
 - CLIMATENEWSFR: `outlier_k=6`, `toa_k=6`, `toa_max_neg=0`.
+
+## Relationship to prior trajectory-labeling code
+
+Model-specific trajectory labels are derived using components adapted from the code released by Zve et al. (2026): https://github.com/evangeliazve/lrec_from_noise_to_signal.
+
