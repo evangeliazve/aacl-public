@@ -77,6 +77,13 @@ The released feature matrices contain `agreement_k` values 1 through 8.
 ```text
 DATA/collection_scripts/climatenewsfr_data_collection_googlenews.py
 DATA/collection_scripts/climatenewsfr_data_collection_X.py
+
+News articles were collected using the GNews Python library:
+https://github.com/ranahaani/GNews
+
+X posts were collected through the X API:
+https://docs.x.com/x-api/introduction
+
 ```
 
 These scripts document the collection procedure used to construct the CLIMATENEWSFR corpus from Google News results and observed X-sharing activity. They are provided to support reuse of the collection pipeline on new local corpora.
