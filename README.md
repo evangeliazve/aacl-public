@@ -79,7 +79,7 @@ DATA/collection_scripts/climatenewsfr_data_collection_googlenews.py
 DATA/collection_scripts/climatenewsfr_data_collection_X.py
 ```
 
-These scripts document the collection procedure used to construct the CLIMATENEWSFR corpus from Google News API results and observed X-sharing activity. They are provided to support reuse of the collection pipeline on new local corpora.
+These scripts document the collection procedure used to construct the CLIMATENEWSFR corpus from Google News results and observed X-sharing activity. They are provided to support reuse of the collection pipeline on new local corpora.
 
 ### Machine-learning result workbooks
 
@@ -133,8 +133,8 @@ The filename tag encodes the selected diagonal agreement rule:
 Each workbook contains three sheets:
 
 - `xgb_global_shap`: global feature importance and direction diagnostics;
-- `xgb_local_predictions`: out-of-fold predicted probabilities for individual articles;
-- `xgb_local_shap_long`: article-feature-level SHAP contributions.
+- `xgb_oof_local_shap`: out-of-fold predicted probabilities for individual articles;
+- `xgb_local_shap`: article-feature-level SHAP contributions.
 
 ### Appendix files
 
