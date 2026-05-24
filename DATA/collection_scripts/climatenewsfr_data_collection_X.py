@@ -1,213 +1,240 @@
-# Load Libraries
-import requests
+"""Collect French climate-change URL-sharing activity from the X API.
+
+This script documents the collection procedure used for the CLIMATENEWSFR
+corpus. It is intentionally parameterized and does not execute at import time.
+
+Example:
+    python DATA/collection_scripts/climatenewsfr_data_collection_X.py \
+        --start-time 2025-04-02T00:00:00Z \
+        --end-time 2025-05-25T23:59:59Z \
+        --bearer-token "$X_BEARER_TOKEN" \
+        --iterations 50 \
+        --output-dir DATA/private/climatenewsfr/x
+"""
+
+from __future__ import annotations
+
+import argparse
 import json
-from datetime import datetime
 import time
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
 import pandas as pd
+import requests
 
 
-def fetch_tweets(start_time, end_time, iterations=1, bearer_token=None, lang="fr"):
-    url = "https://api.twitter.com/2/tweets/search/recent"
+X_SEARCH_URL = "https://api.twitter.com/2/tweets/search/recent"
+DEFAULT_QUERY = "changement climatique has:links lang:fr"
 
-    query = 'changement climatique has:links lang:fr'
 
-    headers = {
-        "Authorization": f"Bearer {bearer_token or 'YOUR_DEFAULT_BEARER_TOKEN'}"
-    }
+def fetch_tweets_from_api(
+    start_time: str | None,
+    end_time: str | None,
+    iterations: int = 1,
+    bearer_token: str | None = None,
+    query: str = DEFAULT_QUERY,
+    pause_seconds: float = 1.0,
+) -> list[dict[str, Any]]:
+    """Fetch tweets from the X API recent-search endpoint.
 
-    querystring = {
+    Parameters
+    ----------
+    start_time, end_time:
+        RFC3339 timestamps, for example ``2025-04-02T00:00:00Z``.
+    iterations:
+        Maximum number of paginated API requests.
+    bearer_token:
+        X API bearer token. The token is required for real collection.
+    query:
+        X API query string.
+    pause_seconds:
+        Delay between paginated requests.
+    """
+    if not bearer_token:
+        raise ValueError("A bearer token is required. Pass --bearer-token or set X_BEARER_TOKEN.")
+
+    headers = {"Authorization": f"Bearer {bearer_token}"}
+    params: dict[str, str] = {
         "max_results": "100",
         "query": query,
-        "tweet.fields": ",".join([
-            "article",
-            "attachments",
-            "author_id",
-            "card_uri",
-            "community_id",
-            "context_annotations",
-            "conversation_id",
-            "created_at",
-            "display_text_range",
-            "edit_controls",
-            "edit_history_tweet_ids",
-            "entities",
-            "geo",
-            "id",
-            "in_reply_to_user_id",
-            "lang",
-            "media_metadata",
-            "note_tweet",
-            "possibly_sensitive",
-            "public_metrics",
-            "referenced_tweets",
-            "reply_settings",
-            "scopes",
-            "source",
-            "text",
-            "withheld",
-        ]),
-        "expansions": ",".join([
-            "article.cover_media",
-            "article.media_entities",
-            "attachments.media_keys",
-            "attachments.media_source_tweet",
-            "attachments.poll_ids",
-            "author_id",
-            "edit_history_tweet_ids",
-            "entities.mentions.username",
-            "geo.place_id",
-            "in_reply_to_user_id",
-            "entities.note.mentions.username",
-            "referenced_tweets.id",
-            "referenced_tweets.id.attachments.media_keys",
-            "referenced_tweets.id.author_id",
-        ]),
-        "media.fields": ",".join([
-            "alt_text",
-            "duration_ms",
-            "height",
-            "media_key",
-            "non_public_metrics",
-            "organic_metrics",
-            "preview_image_url",
-            "promoted_metrics",
-            "public_metrics",
-            "type",
-            "url",
-            "variants",
-            "width",
-        ]),
-        "user.fields": ",".join([
-            #"affiliation",
-            #"confirmed_email",
-            #"connection_status",
-            "created_at",
-            "description",
-            #"entities",
-            "id",
-            "is_identity_verified",
-            "location",
-            #"most_recent_tweet_id",
-            #"name",
-            #"parody",
-            #"pinned_tweet_id",
-            #"profile_banner_url",
-            #"profile_image_url",
-            #"protected",
-            "public_metrics",
-            #"receives_your_dm",
-            #"subscription",
-            #"subscription_type",
-            #"url",
-            #"username",
-            #"verified",
-            "verified_followers_count",
-            #"verified_type",
-            #"withheld",
-        ]),
-        "place.fields": ",".join([
-            "contained_within",
-            "country",
-            "country_code",
-            "full_name",
-            "geo",
-            "id",
-            "name",
-            "place_type",
-        ]),
+        "tweet.fields": ",".join(
+            [
+                "attachments",
+                "author_id",
+                "context_annotations",
+                "conversation_id",
+                "created_at",
+                "edit_controls",
+                "edit_history_tweet_ids",
+                "entities",
+                "geo",
+                "id",
+                "in_reply_to_user_id",
+                "lang",
+                "possibly_sensitive",
+                "public_metrics",
+                "referenced_tweets",
+                "reply_settings",
+                "source",
+                "text",
+                "withheld",
+            ]
+        ),
+        "expansions": ",".join(
+            [
+                "attachments.media_keys",
+                "author_id",
+                "geo.place_id",
+                "referenced_tweets.id",
+                "referenced_tweets.id.author_id",
+            ]
+        ),
+        "media.fields": ",".join(
+            [
+                "alt_text",
+                "duration_ms",
+                "height",
+                "media_key",
+                "preview_image_url",
+                "public_metrics",
+                "type",
+                "url",
+                "variants",
+                "width",
+            ]
+        ),
+        "user.fields": ",".join(
+            [
+                "created_at",
+                "description",
+                "id",
+                "location",
+                "name",
+                "public_metrics",
+                "url",
+                "username",
+                "verified",
+                "verified_type",
+                "withheld",
+            ]
+        ),
+        "place.fields": ",".join(
+            [
+                "contained_within",
+                "country",
+                "country_code",
+                "full_name",
+                "geo",
+                "id",
+                "name",
+                "place_type",
+            ]
+        ),
     }
 
     if start_time:
-        querystring["start_time"] = start_time
+        params["start_time"] = start_time
     if end_time:
-        querystring["end_time"] = end_time
+        params["end_time"] = end_time
 
-    all_tweets = []
-    next_token = None
+    all_tweets: list[dict[str, Any]] = []
+    next_token: str | None = None
 
-    for i in range(iterations):
+    for page_idx in range(iterations):
+        request_params = dict(params)
         if next_token:
-            querystring["next_token"] = next_token
+            request_params["next_token"] = next_token
 
-        response = requests.get(url, headers=headers, params=querystring)
-
+        response = requests.get(X_SEARCH_URL, headers=headers, params=request_params, timeout=30)
         if response.status_code != 200:
-            print(f"Error {response.status_code}: {response.text}")
-            break
+            raise RuntimeError(f"X API error {response.status_code}: {response.text}")
 
-        data = response.json()
-        tweets = data.get("data", [])
-        includes = data.get("includes", {})
+        payload = response.json()
+        tweets = payload.get("data", [])
+        includes = payload.get("includes", {})
 
-        # Build lookup dictionaries
-        users = {u["id"]: u for u in includes.get("users", [])}
-        media = {m["media_key"]: m for m in includes.get("media", [])}
-        places = {p["id"]: p for p in includes.get("places", [])}
-        polls = {p["id"]: p for p in includes.get("polls", [])}
-        ref_tweets = {t["id"]: t for t in includes.get("tweets", [])}
+        users = {user["id"]: user for user in includes.get("users", [])}
+        media = {item["media_key"]: item for item in includes.get("media", [])}
+        places = {place["id"]: place for place in includes.get("places", [])}
+        referenced_tweets = {tweet["id"]: tweet for tweet in includes.get("tweets", [])}
 
         for tweet in tweets:
-            # Add user info
             tweet["user"] = users.get(tweet.get("author_id"))
 
-            # Add media info
-            if "attachments" in tweet and "media_keys" in tweet["attachments"]:
-                tweet["media"] = [
-                    media.get(k) for k in tweet["attachments"]["media_keys"] if k in media
-                ]
+            media_keys = tweet.get("attachments", {}).get("media_keys", [])
+            if media_keys:
+                tweet["media"] = [media[key] for key in media_keys if key in media]
 
-            # Add place info
-            if "geo" in tweet and "place_id" in tweet["geo"]:
-                tweet["place"] = places.get(tweet["geo"]["place_id"])
+            place_id = tweet.get("geo", {}).get("place_id")
+            if place_id:
+                tweet["place"] = places.get(place_id)
 
-            # Add poll info
-            if "attachments" in tweet and "poll_ids" in tweet["attachments"]:
-                tweet["polls"] = [
-                    polls.get(pid) for pid in tweet["attachments"]["poll_ids"] if pid in polls
-                ]
-
-            # Add full referenced tweets
             if "referenced_tweets" in tweet:
                 tweet["referenced_full"] = []
                 for ref in tweet["referenced_tweets"]:
-                    ref_data = ref_tweets.get(ref["id"])
+                    ref_data = referenced_tweets.get(ref.get("id"))
                     if ref_data:
                         ref_data["user"] = users.get(ref_data.get("author_id"))
                         tweet["referenced_full"].append(ref_data)
 
             all_tweets.append(tweet)
 
-        print(f"Iteration {i+1}: {len(tweets)} tweets fetched")
+        print(f"Page {page_idx + 1}: fetched {len(tweets)} tweets")
 
-        next_token = data.get("meta", {}).get("next_token")
+        next_token = payload.get("meta", {}).get("next_token")
         if not next_token:
-            break  # No more pages
-        time.sleep(1)  # Respect rate limits
+            break
+        time.sleep(pause_seconds)
 
     return all_tweets
 
 
-def fetch_tweets(start_time, end_time, iterations=1, bearer_token=None):
-    all_tweets = fetch_tweets(start_time, end_time, iterations, bearer_token, lang="fr")
+def save_tweets(tweets: list[dict[str, Any]], output_dir: str | Path = ".") -> tuple[Path, Path]:
+    """Save collected tweets as JSON and flattened Excel files."""
+    out_dir = Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    json_filename = f"/your_path/tweets_hydrogen_{timestamp}.json"
-    xls_filename = f"/your_path/tweets_hydrogen_{timestamp}.xlsx"
+    json_path = out_dir / f"tweets_climate_{timestamp}.json"
+    xlsx_path = out_dir / f"tweets_climate_{timestamp}.xlsx"
 
-    with open(json_filename, "w", encoding="utf-8") as f:
-        json.dump(all_tweets, f, ensure_ascii=False, indent=2)
+    with json_path.open("w", encoding="utf-8") as file:
+        json.dump(tweets, file, ensure_ascii=False, indent=2)
 
-    df = pd.json_normalize(all_tweets, sep="_")
-    df.to_excel(xls_filename)
-
-    print(f"Saved {len(all_tweets)} tweets")
-
-    return all_tweets
+    pd.json_normalize(tweets, sep="_").to_excel(xlsx_path, index=False)
+    return json_path, xlsx_path
 
 
-# Get Results
-start="SET_YOUR_START_DATE_XXX-XX-XXTXX:XX:00Z"
-end="SET_YOUR_END_DATE_XXX-XX-XXTXX:XX:00Z"
-token="SET_YOUR_TOKEN"
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Collect CLIMATENEWSFR X-sharing activity.")
+    parser.add_argument("--start-time", required=True, help="RFC3339 start timestamp, e.g. 2025-04-02T00:00:00Z")
+    parser.add_argument("--end-time", required=True, help="RFC3339 end timestamp, e.g. 2025-05-25T23:59:59Z")
+    parser.add_argument("--bearer-token", default=None, help="X API bearer token. Defaults to X_BEARER_TOKEN env var if omitted.")
+    parser.add_argument("--query", default=DEFAULT_QUERY, help="X API query string.")
+    parser.add_argument("--iterations", type=int, default=50, help="Maximum number of API pages to fetch.")
+    parser.add_argument("--pause-seconds", type=float, default=1.0, help="Delay between paginated requests.")
+    parser.add_argument("--output-dir", default=".", help="Directory for JSON and Excel outputs.")
+    return parser.parse_args()
 
-fetch_tweets(start_time=start, end_time=end, iterations=50, bearer_token=token)
+
+def main() -> None:
+    import os
+
+    args = parse_args()
+    token = args.bearer_token or os.environ.get("X_BEARER_TOKEN")
+    tweets = fetch_tweets_from_api(
+        start_time=args.start_time,
+        end_time=args.end_time,
+        iterations=args.iterations,
+        bearer_token=token,
+        query=args.query,
+        pause_seconds=args.pause_seconds,
+    )
+    json_path, xlsx_path = save_tweets(tweets, args.output_dir)
+    print(f"Saved {len(tweets)} tweets to {json_path} and {xlsx_path}")
+
+
+if __name__ == "__main__":
+    main()
