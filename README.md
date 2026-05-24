@@ -95,26 +95,72 @@ RESULTS/hydronewsfr/hydronewsfr_results.xlsx
 RESULTS/climatenewsfr/climatenewsfr_results.xlsx
 ```
 
-Each workbook contains one sheet:
+Each workbook contains three sheets:
 
 ```text
 ml_metrics_with_ablation
+fold_ablation
+fold_ablation_paired_tests
 ```
 
-The sheet reports cross-validated results for the released diagonal agreement settings, where:
+#### `ml_metrics_with_ablation`
+
+This sheet reports cross-validated classifier results for the released diagonal agreement settings, where:
 
 ```text
 outlier_k = toa_k = agreement_k
 toa_max_neg = 0
 ```
 
-The columns include `horizon`, `outlier_k`, `toa_k`, `toa_max_neg`, `cv_n_splits`, `clf_name`, `ablation`, `n_articles`, class counts, and fold means/standard deviations for F1, precision, recall, average precision (`AP_*`), and ROC AUC (`ROC_AUC_*`).
+The columns include `horizon`, `outlier_k`, `toa_k`, `toa_max_neg`, `cv_n_splits`, `clf_name`, `ablation`, `n_articles`, class counts, and fold means/standard deviations for precision, F1, and recall.
 
 The supervised models are abbreviated as follows: `xgb` denotes XGBoost, `rf` Random Forest, `logreg` Logistic Regression, `linear_svc` a linear Support Vector Machine, and `dt` a Decision Tree classifier.
 
 The ablation labels describe which feature families are used. `all_features` includes the full set of geometric, textual, and social predictors. `no_geom`, `no_social`, and `no_text` remove one feature family at a time. `only_geom`, `only_social`, and `only_text` keep only the corresponding feature family.
 
 The baseline row is `baseline_all_pos`. It is reported once per agreement threshold, not once per ablation; its ablation field is `baseline`.
+
+#### `fold_ablation`
+
+This sheet reports fold-level XGBoost ablation results for the selected paper setting:
+
+```text
+HYDRONEWSFR:   k = 4 -> (4, 4, 0)
+CLIMATENEWSFR: k = 6 -> (6, 6, 0)
+```
+
+It contains one row per cross-validation fold and ablation setting. The columns include the selected consensus thresholds, classifier name, ablation label, fold identifier, train/test sizes, train/test class counts, number of features, and fold-level precision, F1, and recall.
+
+These fold-level values are used to compute the ablation means reported in the paper.
+
+#### `fold_ablation_paired_tests`
+
+This sheet reports paired fold-level significance tests for the selected XGBoost ablation setting.
+
+The included metrics are:
+
+```text
+Precision
+F1
+Recall
+```
+
+For each metric and ablation comparison, the sheet reports the reference setting, comparison setting, number of folds, mean scores, fold-level mean difference, standard deviation of the fold differences, paired t statistic, raw paired t-test p-value, Benjamini-Hochberg corrected q-value, and significance label.
+
+The paper's ablation-table symbols are based on significant F1 drops after Benjamini-Hochberg correction of paired fold-level t-test p-values. Precision and recall tests are provided as diagnostics to show whether F1 changes reflect losses in one or both components.
+
+The main comparisons are:
+
+```text
+all_features vs no_geom
+all_features vs no_social
+all_features vs no_text
+all_features vs only_geom
+only_geom vs only_text
+only_geom vs only_social
+```
+
+In the paper table, `†` indicates a significant F1 drop relative to `all_features`, and `‡` indicates a significant F1 drop relative to `only_geom`.
 
 ### Agreement matrices
 
