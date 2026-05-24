@@ -1,547 +1,569 @@
 #!/usr/bin/env python3
-"""Run the supervised classifiers, feature-family ablations, and selected-setting ablation tests."""
+"""Create publication-time feature tables used by the experiments.
+
+Outputs:
+  - feature_long_model_level.csv: one row per article and embedding model
+  - feature_article_level.csv: one row per article after model aggregation
+
+Only features used in the reported experiments are created.
+"""
 from __future__ import annotations
 
 import argparse
+import math
+import re
+from collections import Counter
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-from scipy.stats import ttest_rel
-from sklearn.base import clone
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.impute import SimpleImputer
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import f1_score, precision_score, recall_score
-from sklearn.model_selection import GroupKFold
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
-from sklearn.svm import LinearSVC
-from sklearn.tree import DecisionTreeClassifier
+import yaml
+from sklearn.neighbors import NearestNeighbors
 
-GEOM_PREFIXES = (
-    "d1_", "d2_", "margin_", "mahal_", "knn_", "outlier_proto_", "outlier_score",
-    "has_recent_outliers", "n_recent_outliers", "n_models_present",
-)
-TEXT_PREFIXES = ("text_", "avg_", "total_syllables", "len_", "ner_")
-SOCIAL_PREFIXES = ("soc_", "media_")
-META_COLS = {"article_url", "agreement_k", "label_TOA", "horizon"}
-
-ABLATION_ORDER = [
-    "all_features",
-    "no_geom",
-    "no_social",
-    "no_text",
-    "only_geom",
-    "only_social",
-    "only_text",
+GEOM_BASE = [
+    "d1_nearest_centroid_pct", "d2_second_centroid_pct", "margin_d2_minus_d1_pct",
+    "mahal_nearest_pct", "knn_mean_k20_pct", "knn_std_k20_pct",
+    "outlier_proto_mean_dist_pct", "outlier_score", "has_recent_outliers", "n_recent_outliers",
 ]
-MODEL_ORDER = ["xgb", "rf", "logreg", "linear_svc", "dt"]
-PAPER_METRICS = ["F1", "Precision", "Recall"]
 
-SELECTED_PAIRED_COMPARISONS = [
-    ("all_features", "no_geom"),
-    ("all_features", "only_geom"),
-    ("all_features", "no_social"),
-    ("all_features", "no_text"),
-    ("only_geom", "only_text"),
-    ("only_geom", "only_social"),
+TEXT_SOCIAL = [
+    "soc_unique_users", "soc_median_user_public_metrics_followers_count",
+    "soc_median_user_public_metrics_tweet_count", "soc_median_user_public_metrics_listed_count",
+    "media_weighted_clustering", "media_bridge_ratio", "media_community_size",
+    "text_subjectivity", "text_neutrality", "avg_sentence_len_words", "avg_word_len_chars",
+    "total_syllables", "avg_syllables_per_word", "len_chars", "len_words",
+    "ner_total_ents", "ner_distinct_ents", "ner_person", "ner_org", "ner_loc", "ner_misc",
+]
+
+SOCIAL_ZERO_FEATURES = [
+    "soc_unique_users", "soc_median_user_public_metrics_followers_count",
+    "soc_median_user_public_metrics_tweet_count", "soc_median_user_public_metrics_listed_count",
+    "media_weighted_clustering", "media_bridge_ratio", "media_community_size",
 ]
 
 
-def read_matrix(path: str | Path) -> pd.DataFrame:
+def load_config(path: str | Path) -> Dict[str, Any]:
+    with open(path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+
+def read_table(path: str | Path | None) -> Optional[pd.DataFrame]:
+    if path is None or str(path).lower() in {"", "none", "null"}:
+        return None
     p = Path(path)
+    if not p.exists():
+        return None
     if p.suffix.lower() in {".xlsx", ".xls"}:
-        return pd.read_excel(p, sheet_name="feature_matrix")
+        return pd.read_excel(p)
     return pd.read_csv(p)
 
 
-def feature_groups(columns: List[str]) -> Dict[str, List[str]]:
-    feats = [c for c in columns if c not in META_COLS]
-    geom = [c for c in feats if c.startswith(GEOM_PREFIXES)]
-    text = [c for c in feats if c.startswith(TEXT_PREFIXES)]
-    social = [c for c in feats if c.startswith(SOCIAL_PREFIXES)]
-    groups = {
-        "all_features": feats,
-        "no_geom": [c for c in feats if c not in geom],
-        "no_social": [c for c in feats if c not in social],
-        "no_text": [c for c in feats if c not in text],
-        "only_geom": geom,
-        "only_social": social,
-        "only_text": text,
-    }
-    return {name: groups[name] for name in ABLATION_ORDER if groups.get(name)}
+def to_dt_naive(s: pd.Series) -> pd.Series:
+    return pd.to_datetime(s, errors="coerce", utc=True).dt.tz_convert(None)
 
 
-def make_models(y: np.ndarray, random_state: int) -> Dict[str, object]:
-    n_pos = max(int((y == 1).sum()), 1)
-    n_neg = int((y == 0).sum())
-    scale_pos_weight = n_neg / n_pos
+def first_existing(df: pd.DataFrame, candidates: Iterable[str]) -> Optional[str]:
+    for c in candidates:
+        if c in df.columns:
+            return c
+    return None
 
-    models: Dict[str, object] = {}
+
+def clean_text(x: Any) -> str:
+    return "" if pd.isna(x) else str(x)
+
+
+def entropy(values: Iterable[Any]) -> float:
+    vals = [str(v) for v in values if pd.notna(v)]
+    if not vals:
+        return 0.0
+    counts = Counter(vals)
+    n = float(sum(counts.values()))
+    p = np.array(list(counts.values()), dtype=float) / n
+    p = p[p > 0]
+    return float(-(p * np.log(p)).sum())
+
+
+# ---------------------------------------------------------------------------
+# Text / NER features: reduced final feature set only
+# ---------------------------------------------------------------------------
+
+def approx_syllables_fr(word: str) -> int:
+    w = str(word).lower()
+    if not w:
+        return 0
+    vowels = "aeiouyàâäéèêëïîôöùûüÿœ"
+    in_vowel = False
+    count = 0
+    for ch in w:
+        if ch in vowels:
+            if not in_vowel:
+                count += 1
+                in_vowel = True
+        else:
+            in_vowel = False
+    return max(count, 1) if any(c.isalpha() for c in w) else 0
+
+
+def text_features(articles: pd.DataFrame, cfg: Dict[str, Any]) -> pd.DataFrame:
+    id_col = cfg["input"]["article_id_col"]
+    title_col = cfg["input"].get("title_col", "title")
+    text_col = cfg["input"].get("text_col", "description")
+    spacy_model = cfg.get("features", {}).get("spacy_model", "fr_core_news_md")
+
     try:
-        from xgboost import XGBClassifier
-        models["xgb"] = Pipeline([
-            ("imputer", SimpleImputer(strategy="median")),
-            ("clf", XGBClassifier(
-                n_estimators=300,
-                max_depth=4,
-                learning_rate=0.05,
-                subsample=0.8,
-                colsample_bytree=0.8,
-                objective="binary:logistic",
-                eval_metric="logloss",
-                scale_pos_weight=scale_pos_weight,
-                random_state=random_state,
-                n_jobs=-1,
-            )),
-        ])
+        from textblob import Blobber, TextBlob
+        from textblob_fr import PatternTagger, PatternAnalyzer
+        tb_fr = Blobber(pos_tagger=PatternTagger(), analyzer=PatternAnalyzer())
+        has_textblob_fr = True
+        has_textblob = True
     except Exception:
-        pass
+        tb_fr = None
+        has_textblob_fr = False
+        try:
+            from textblob import TextBlob  # type: ignore
+            has_textblob = True
+        except Exception:
+            TextBlob = None  # type: ignore
+            has_textblob = False
 
-    models.update({
-        "rf": Pipeline([
-            ("imputer", SimpleImputer(strategy="median")),
-            ("clf", RandomForestClassifier(
-                n_estimators=600,
-                max_depth=8,
-                min_samples_split=20,
-                min_samples_leaf=10,
-                max_features="sqrt",
-                class_weight="balanced",
-                random_state=random_state,
-                n_jobs=-1,
-            )),
-        ]),
-        "logreg": Pipeline([
-            ("imputer", SimpleImputer(strategy="median")),
-            ("scaler", StandardScaler()),
-            ("clf", LogisticRegression(
-                penalty="l2",
-                solver="liblinear",
-                max_iter=2000,
-                class_weight="balanced",
-                random_state=random_state,
-            )),
-        ]),
-        "linear_svc": Pipeline([
-            ("imputer", SimpleImputer(strategy="median")),
-            ("scaler", StandardScaler()),
-            ("clf", LinearSVC(max_iter=5000, class_weight="balanced", random_state=random_state)),
-        ]),
-        "dt": Pipeline([
-            ("imputer", SimpleImputer(strategy="median")),
-            ("clf", DecisionTreeClassifier(
-                max_depth=6,
-                min_samples_leaf=10,
-                class_weight="balanced",
-                random_state=random_state,
-            )),
-        ]),
-    })
-    return {name: models[name] for name in MODEL_ORDER if name in models}
+    try:
+        from vaderSentiment_fr.vaderSentiment import SentimentIntensityAnalyzer
+        vader = SentimentIntensityAnalyzer()
+    except Exception:
+        vader = None
 
+    try:
+        import spacy
+        nlp = spacy.load(spacy_model)
+    except Exception:
+        nlp = None
 
-def scores(y_true, y_pred) -> Dict[str, float]:
-    return {
-        "F1": f1_score(y_true, y_pred, zero_division=0),
-        "Precision": precision_score(y_true, y_pred, zero_division=0),
-        "Recall": recall_score(y_true, y_pred, zero_division=0),
-    }
+    rows: List[Dict[str, Any]] = []
+    for _, r in articles.iterrows():
+        text = (clean_text(r.get(title_col, "")) + " " + clean_text(r.get(text_col, ""))).strip()
+        words = re.findall(r"\w+", text, flags=re.UNICODE)
+        sentences = [s.strip() for s in re.split(r"[.!?]+", text) if s.strip()]
+        sentence_lengths = [len(re.findall(r"\w+", s, flags=re.UNICODE)) for s in sentences]
+        syllables = [approx_syllables_fr(w) for w in words]
 
-
-def predict_scores(model, X):
-    if hasattr(model, "predict_proba"):
-        return model.predict_proba(X)[:, 1]
-    if hasattr(model, "decision_function"):
-        raw = model.decision_function(X)
-        return 1.0 / (1.0 + np.exp(-raw))
-    return model.predict(X)
-
-
-def summarize(
-    k: int,
-    clf_name: str,
-    ablation: str | None,
-    fold_scores: List[Dict[str, float]],
-    n_splits: int,
-    y: np.ndarray,
-) -> Dict:
-    row = {
-        "outlier_k": k,
-        "toa_k": k,
-        "toa_max_neg": 0,
-        "cv_n_splits": n_splits,
-        "clf_name": clf_name,
-        "ablation": ablation,
-        "n_articles": len(y),
-        "n_pos_articles_est": int((y == 1).sum()),
-        "n_neg_articles_est": int((y == 0).sum()),
-    }
-    for metric in PAPER_METRICS:
-        vals = [s[metric] for s in fold_scores if metric in s]
-        row[f"{metric}_mean"] = float(np.nanmean(vals)) if vals else np.nan
-        row[f"{metric}_std"] = float(np.nanstd(vals, ddof=1)) if len(vals) > 1 else np.nan
-    return row
-
-
-def evaluate_threshold(
-    df: pd.DataFrame,
-    k: int,
-    groups: Dict[str, List[str]],
-    random_state: int,
-    cv_folds: int,
-    include_all_negative_baseline: bool = False,
-) -> List[Dict]:
-    sub = df[df["agreement_k"] == k].dropna(subset=["label_TOA"]).copy()
-    if sub.empty:
-        print(f"warning: agreement_k={k} is not present in the feature matrix; skipped")
-        return []
-    sub["label_TOA"] = sub["label_TOA"].astype(int)
-    if len(sub) < 2 or sub["label_TOA"].nunique() < 2:
-        print(f"warning: agreement_k={k} has fewer than two classes after filtering; skipped")
-        return []
-
-    y = sub["label_TOA"].to_numpy()
-    groups_cv = sub["article_url"].to_numpy() if "article_url" in sub else np.arange(len(sub))
-    n_splits = min(cv_folds, len(sub), int(np.bincount(y).min()) if len(np.bincount(y)) > 1 else 1)
-    if n_splits < 2:
-        print(f"warning: agreement_k={k} has too few minority-class examples for cross-validation; skipped")
-        return []
-
-    rows: List[Dict] = []
-    splitter = GroupKFold(n_splits=n_splits)
-
-    # Baseline rows are computed once per agreement threshold, not once per ablation.
-    baseline_specs = [("baseline_all_pos", 1)]
-    if include_all_negative_baseline:
-        baseline_specs.append(("baseline_all_neg", 0))
-
-    first_features = next(iter(groups.values()))
-    X_dummy = sub[first_features].apply(pd.to_numeric, errors="coerce")
-
-    for name, constant in baseline_specs:
-        fold_scores = []
-        for _, test_idx in splitter.split(X_dummy, y, groups_cv):
-            yp = np.full(len(test_idx), constant)
-            fold_scores.append(scores(y[test_idx], yp))
-        rows.append(
-            summarize(
-                k,
-                name,
-                ablation="baseline",
-                fold_scores=fold_scores,
-                n_splits=n_splits,
-                y=y,
-            )
-        )
-
-    models = make_models(y, random_state)
-
-    for ablation, cols in groups.items():
-        if not cols:
-            continue
-        X = sub[cols].apply(pd.to_numeric, errors="coerce")
-        for name, model in models.items():
-            fold_scores = []
-            for train_idx, test_idx in splitter.split(X, y, groups_cv):
-                if len(np.unique(y[train_idx])) < 2 or len(np.unique(y[test_idx])) < 2:
-                    continue
-                m = clone(model)
-                m.fit(X.iloc[train_idx], y[train_idx])
-                ys = predict_scores(m, X.iloc[test_idx])
-                yp = (ys >= 0.5).astype(int)
-                fold_scores.append(scores(y[test_idx], yp))
-            if fold_scores:
-                rows.append(summarize(k, name, ablation, fold_scores, n_splits, y))
-    return rows
-
-
-def bh_fdr(pvals):
-    pvals = np.asarray(pvals, dtype=float)
-    qvals = np.full(len(pvals), np.nan)
-
-    valid = ~np.isnan(pvals)
-    if valid.sum() == 0:
-        return qvals
-
-    pv = pvals[valid]
-    order = np.argsort(pv)
-    ranked = pv[order]
-
-    q = ranked * len(ranked) / np.arange(1, len(ranked) + 1)
-    q = np.minimum.accumulate(q[::-1])[::-1]
-    q = np.clip(q, 0, 1)
-
-    out = np.empty_like(pv)
-    out[order] = q
-    qvals[valid] = out
-    return qvals
-
-
-def cohens_dz(diff):
-    diff = np.asarray(diff, dtype=float)
-    if len(diff) < 2:
-        return np.nan
-
-    sd = np.std(diff, ddof=1)
-    if sd == 0:
-        if np.mean(diff) == 0:
-            return 0.0
-        return np.inf
-
-    return np.mean(diff) / sd
-
-
-def significance_label(q):
-    if pd.isna(q):
-        return "n/a"
-    if q < 0.001:
-        return "***"
-    if q < 0.01:
-        return "**"
-    if q < 0.05:
-        return "*"
-    return "ns"
-
-
-def selected_setting_fold_ablation(
-    df: pd.DataFrame,
-    selected_k: int,
-    groups: Dict[str, List[str]],
-    random_state: int,
-    cv_folds: int,
-) -> pd.DataFrame:
-    """
-    Run selected-setting XGBoost ablations at one agreement threshold.
-
-    This uses the same released feature matrix, feature-family groups, GroupKFold
-    split logic, XGBoost model specification, and whole-selected-setting
-    scale_pos_weight logic as the main ML experiment.
-    """
-    sub = df[df["agreement_k"] == selected_k].dropna(subset=["label_TOA"]).copy()
-    if sub.empty:
-        raise ValueError(f"agreement_k={selected_k} is not present in the feature matrix.")
-
-    sub["label_TOA"] = sub["label_TOA"].astype(int)
-    if len(sub) < 2 or sub["label_TOA"].nunique() < 2:
-        raise ValueError(f"agreement_k={selected_k} has fewer than two classes after filtering.")
-
-    y = sub["label_TOA"].to_numpy()
-    groups_cv = sub["article_url"].to_numpy() if "article_url" in sub else np.arange(len(sub))
-    n_splits = min(cv_folds, len(sub), int(np.bincount(y).min()) if len(np.bincount(y)) > 1 else 1)
-    if n_splits < 2:
-        raise ValueError(f"agreement_k={selected_k} has too few minority-class examples for cross-validation.")
-
-    if "xgb" not in make_models(y, random_state):
-        raise RuntimeError("XGBoost is not available. Install xgboost to run selected-setting ablation tests.")
-
-    splitter = GroupKFold(n_splits=n_splits)
-    xgb_model = make_models(y, random_state)["xgb"]
-
-    fold_records = []
-
-    for ablation in [
-        "all_features",
-        "only_geom",
-        "only_text",
-        "only_social",
-        "no_geom",
-        "no_social",
-        "no_text",
-    ]:
-        if ablation not in groups:
-            print(f"warning: ablation={ablation} has no feature columns; skipped")
-            continue
-
-        cols = groups[ablation]
-        X = sub[cols].apply(pd.to_numeric, errors="coerce")
-
-        for fold_id, (train_idx, test_idx) in enumerate(splitter.split(X, y, groups_cv), start=1):
-            if len(np.unique(y[train_idx])) < 2 or len(np.unique(y[test_idx])) < 2:
-                print(f"warning: selected k={selected_k}, fold={fold_id} skipped because train/test has one class only")
-                continue
-
-            m = clone(xgb_model)
-            m.fit(X.iloc[train_idx], y[train_idx])
-            ys = predict_scores(m, X.iloc[test_idx])
-            yp = (ys >= 0.5).astype(int)
-            fold_scores = scores(y[test_idx], yp)
-
-            fold_records.append({
-                "outlier_maj": selected_k,
-                "toa_min_pos": selected_k,
-                "toa_max_neg": 0,
-                "clf_name": "xgb",
-                "ablation": ablation,
-                "fold": fold_id,
-                "n_train": int(len(train_idx)),
-                "n_test": int(len(test_idx)),
-                "n_train_pos": int(y[train_idx].sum()),
-                "n_train_neg": int(len(train_idx) - y[train_idx].sum()),
-                "n_test_pos": int(y[test_idx].sum()),
-                "n_test_neg": int(len(test_idx) - y[test_idx].sum()),
-                "n_features": int(len(cols)),
-                "F1": float(fold_scores["F1"]),
-                "Precision": float(fold_scores["Precision"]),
-                "Recall": float(fold_scores["Recall"]),
-            })
-
-    return pd.DataFrame(fold_records)
-
-
-def paired_ablation_tests(
-    df_fold: pd.DataFrame,
-    selected_k: int,
-    comparisons=None,
-) -> pd.DataFrame:
-    if comparisons is None:
-        comparisons = SELECTED_PAIRED_COMPARISONS
-
-    test_rows = []
-
-    for reference, comparison in comparisons:
-        for metric in PAPER_METRICS:
-            wide = (
-                df_fold[df_fold["ablation"].isin([reference, comparison])]
-                .pivot_table(index="fold", columns="ablation", values=metric, aggfunc="mean")
-                .dropna()
-            )
-
-            if reference not in wide.columns or comparison not in wide.columns:
-                continue
-            if len(wide) < 2:
-                continue
-
-            ref_values = wide[reference].astype(float).values
-            comp_values = wide[comparison].astype(float).values
-            diff = ref_values - comp_values
-
+        subj = np.nan
+        if text and has_textblob_fr and tb_fr is not None:
             try:
-                t_stat, p_t = ttest_rel(ref_values, comp_values)
+                subj = float(tb_fr(text).sentiment[1])
             except Exception:
-                t_stat, p_t = np.nan, np.nan
+                subj = np.nan
+        elif text and has_textblob and TextBlob is not None:  # type: ignore[name-defined]
+            try:
+                subj = float(TextBlob(text).sentiment.subjectivity)  # type: ignore[union-attr]
+            except Exception:
+                subj = np.nan
 
-            test_rows.append({
-                "k": selected_k,
-                "clf_name": "xgb",
-                "metric": metric,
-                "reference": reference,
-                "comparison": comparison,
-                "n_folds": int(len(wide)),
-                "reference_mean": float(np.mean(ref_values)),
-                "comparison_mean": float(np.mean(comp_values)),
-                "mean_diff_ref_minus_comp": float(np.mean(diff)),
-                "std_diff": float(np.std(diff, ddof=1)) if len(diff) > 1 else np.nan,
-                "cohens_dz": float(cohens_dz(diff)),
-                "paired_t_stat": float(t_stat) if not pd.isna(t_stat) else np.nan,
-                "paired_t_p": float(p_t) if not pd.isna(p_t) else np.nan,
-                "diffs_by_fold": ", ".join([f"{x:.4f}" for x in diff]),
-            })
+        neutrality = np.nan
+        if text and vader is not None:
+            try:
+                neutrality = float(1.0 - abs(float(vader.polarity_scores(text)["compound"])))
+            except Exception:
+                neutrality = np.nan
 
-    df_tests = pd.DataFrame(test_rows)
+        ents = []
+        if text and nlp is not None:
+            try:
+                ents = [(e.text, e.label_) for e in nlp(text).ents]
+            except Exception:
+                ents = []
+        labels = [lab for _, lab in ents]
 
-    test_cols = [
-        "k",
-        "clf_name",
-        "metric",
-        "reference",
-        "comparison",
-        "n_folds",
-        "reference_mean",
-        "comparison_mean",
-        "mean_diff_ref_minus_comp",
-        "std_diff",
-        "cohens_dz",
-        "paired_t_stat",
-        "paired_t_p",
-        "diffs_by_fold",
-        "paired_t_q_fdr",
-        "paired_t_sig",
+        rows.append({
+            id_col: r[id_col],
+            "text_subjectivity": subj,
+            "text_neutrality": neutrality,
+            "avg_sentence_len_words": float(np.mean(sentence_lengths)) if sentence_lengths else 0.0,
+            "avg_word_len_chars": float(np.mean([len(w) for w in words])) if words else 0.0,
+            "total_syllables": float(sum(syllables)) if syllables else 0.0,
+            "avg_syllables_per_word": float(np.mean(syllables)) if syllables else 0.0,
+            "len_chars": float(len(text)),
+            "len_words": float(len(words)),
+            "ner_total_ents": float(len(ents)),
+            "ner_distinct_ents": float(len({t for t, _ in ents})),
+            "ner_person": float(sum(lab in {"PER", "PERSON"} for lab in labels)),
+            "ner_org": float(sum(lab in {"ORG"} for lab in labels)),
+            "ner_loc": float(sum(lab in {"LOC", "GPE"} for lab in labels)),
+            "ner_misc": float(sum(lab not in {"PER", "PERSON", "ORG", "LOC", "GPE"} for lab in labels)),
+        })
+    return pd.DataFrame(rows)
+
+
+# ---------------------------------------------------------------------------
+# Social / media graph features: final reduced set only, computed at article tau
+# ---------------------------------------------------------------------------
+
+def tau_edges_effective(tau: pd.Timestamp) -> pd.Timestamp:
+    tau = pd.Timestamp(tau)
+    if tau.hour == 0 and tau.minute == 0 and tau.second == 0 and tau.microsecond == 0 and tau.nanosecond == 0:
+        return tau + pd.Timedelta(days=1)
+    return tau
+
+
+def prepare_shares(shares: Optional[pd.DataFrame], cfg: Dict[str, Any]) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
+    if shares is None or shares.empty:
+        return None, None
+    df = shares.copy()
+    id_col = cfg["input"]["article_id_col"]
+    url_col = cfg["input"].get("url_col", id_col)
+    share_url_col = first_existing(df, ["media_url", url_col, id_col, "article_url", "url"])
+    if share_url_col is None:
+        return None, None
+    if share_url_col != id_col:
+        df = df.rename(columns={share_url_col: id_col})
+    time_col = first_existing(df, ["created_at", "publication_date_cleaned", cfg["input"].get("date_col", "")])
+    if time_col is None:
+        return None, None
+    df[time_col] = to_dt_naive(df[time_col])
+    if "author_id" not in df.columns and "user_id" in df.columns:
+        df["author_id"] = df["user_id"]
+    if "author_id" in df.columns:
+        df["author_id"] = df["author_id"].astype(str)
+    return df, time_col
+
+
+def social_aggregate_for_media(hist: pd.DataFrame, media_id: Any, id_col: str) -> Dict[str, float]:
+    out = {c: 0.0 for c in SOCIAL_ZERO_FEATURES if c.startswith("soc_")}
+    if hist.empty or id_col not in hist.columns:
+        return out
+    g = hist[hist[id_col] == media_id]
+    if g.empty:
+        return out
+
+    user_col = "author_id" if "author_id" in g.columns else ("user_id" if "user_id" in g.columns else None)
+    out["soc_unique_users"] = float(g[user_col].nunique()) if user_col else 0.0
+    for raw, name in [
+        ("followers_count", "soc_median_user_public_metrics_followers_count"),
+        ("tweet_count", "soc_median_user_public_metrics_tweet_count"),
+        ("listed_count", "soc_median_user_public_metrics_listed_count"),
+    ]:
+        col = raw if raw in g.columns else f"user_public_metrics_{raw}"
+        out[name] = float(pd.to_numeric(g[col], errors="coerce").median()) if col in g.columns else 0.0
+    return out
+
+
+def media_graph_features_at_tau(hist: pd.DataFrame, media_id: Any, id_col: str) -> Dict[str, float]:
+    graph_defaults = {
+        "media_weighted_clustering": 0.0,
+        "media_bridge_ratio": 0.0,
+        "media_community_size": 0.0,
+    }
+    if hist.empty or "author_id" not in hist.columns or id_col not in hist.columns:
+        return graph_defaults
+    try:
+        import networkx as nx
+        from networkx.algorithms import bipartite as nx_bip
+    except Exception:
+        return graph_defaults
+    try:
+        import community as community_louvain
+    except Exception:
+        community_louvain = None
+
+    pairs = hist.dropna(subset=["author_id", id_col])[["author_id", id_col]].drop_duplicates()
+    if pairs.empty:
+        return graph_defaults
+
+    B = nx.Graph()
+    for _, r in pairs.iterrows():
+        u = r["author_id"]
+        m = r[id_col]
+        B.add_node(u, bipartite="user")
+        B.add_node(m, bipartite="media")
+        B.add_edge(u, m)
+
+    media_nodes = [n for n, d in B.nodes(data=True) if d.get("bipartite") == "media"]
+    if not media_nodes:
+        return graph_defaults
+    Gm = nx_bip.weighted_projected_graph(B, media_nodes)
+    if not Gm.has_node(media_id):
+        Gm.add_node(media_id)
+
+    clustering = nx.clustering(Gm, media_id, weight="weight") if Gm.degree(media_id) > 0 else 0.0
+    partition = {}
+    comm_size = 0.0
+    bridge_ratio = 0.0
+    if Gm.number_of_edges() > 0 and community_louvain is not None:
+        try:
+            partition = community_louvain.best_partition(Gm, weight="weight", random_state=42)
+        except TypeError:
+            partition = community_louvain.best_partition(Gm, weight="weight")
+        except Exception:
+            partition = {}
+    if partition:
+        c_id = partition.get(media_id, -1)
+        comm_counts = Counter(partition.values())
+        comm_size = float(comm_counts.get(c_id, 0.0))
+        within = 0.0
+        between = 0.0
+        for nbr, data in Gm[media_id].items():
+            w = float(data.get("weight", 1.0))
+            if partition.get(nbr, -1) == c_id:
+                within += w
+            else:
+                between += w
+        bridge_ratio = float(between / (within + between + 1e-6))
+    else:
+        comm_size = 1.0 if Gm.has_node(media_id) else 0.0
+        bridge_ratio = 0.0
+
+    return {
+        "media_weighted_clustering": float(clustering),
+        "media_bridge_ratio": float(bridge_ratio),
+        "media_community_size": float(comm_size),
+    }
+
+
+def social_features(shares: Optional[pd.DataFrame], articles: pd.DataFrame, cfg: Dict[str, Any]) -> pd.DataFrame:
+    id_col = cfg["input"]["article_id_col"]
+    date_col = cfg["input"]["date_col"]
+    base = articles[[id_col, date_col]].drop_duplicates(id_col).copy()
+    for c in SOCIAL_ZERO_FEATURES:
+        base[c] = 0.0
+    shares_prepared, share_time_col = prepare_shares(shares, cfg)
+    if shares_prepared is None or share_time_col is None:
+        return base.drop(columns=[date_col]).fillna(0.0)
+
+    cache: Dict[pd.Timestamp, pd.DataFrame] = {}
+    rows: List[Dict[str, Any]] = []
+    for _, r in base[[id_col, date_col]].iterrows():
+        media_id = r[id_col]
+        tau = pd.Timestamp(r[date_col]) if pd.notna(r[date_col]) else pd.NaT
+        if pd.isna(tau):
+            rec = {id_col: media_id, **{c: 0.0 for c in SOCIAL_ZERO_FEATURES}}
+            rows.append(rec)
+            continue
+        tau_eff = tau_edges_effective(tau)
+        if tau_eff not in cache:
+            cache[tau_eff] = shares_prepared[shares_prepared[share_time_col] < tau_eff].copy()
+        hist = cache[tau_eff]
+        rec = {id_col: media_id}
+        rec.update(social_aggregate_for_media(hist, media_id, id_col))
+        rec.update(media_graph_features_at_tau(hist, media_id, id_col))
+        rows.append(rec)
+    return pd.DataFrame(rows).fillna(0.0)
+
+
+# ---------------------------------------------------------------------------
+# Geometry features: notebook-compatible context for final reduced feature set
+# ---------------------------------------------------------------------------
+
+def normalized_results(results: pd.DataFrame, cfg: Dict[str, Any]) -> Tuple[pd.DataFrame, str, str, List[str]]:
+    df = results.copy()
+    id_col = cfg["input"]["article_id_col"]
+    date_col = cfg["input"]["date_col"]
+    time_col = first_existing(df, ["snapshot_date", "time_window"])
+    if time_col is None:
+        raise ValueError("results.csv must contain snapshot_date or time_window")
+    topic_col = first_existing(df, ["topic_id", "predicted_topic"])
+    if topic_col is None:
+        raise ValueError("results.csv must contain topic_id or predicted_topic")
+    dim_cols = [c for c in df.columns if c.startswith("umap_dim_")]
+    if not dim_cols:
+        dim_cols = [c for c in df.columns if c.startswith("umap_")]
+    if not dim_cols:
+        raise ValueError("results.csv must contain reduced-dimension columns starting with umap_dim_ or umap_")
+
+    df["__time__"] = to_dt_naive(df[time_col])
+    df[date_col] = to_dt_naive(df[date_col])
+    df["__topic__"] = pd.to_numeric(df[topic_col], errors="coerce").fillna(-1).astype(int)
+    if "is_outlier" in df.columns:
+        df["__is_outlier__"] = df["is_outlier"].astype(str).str.lower().isin(["true", "1", "yes"])
+    else:
+        df["__is_outlier__"] = df["__topic__"].eq(-1)
+    df["__model__"] = df.get("model", df.get("model_name", "model"))
+    return df, id_col, date_col, dim_cols
+
+
+def publication_time_rows(results: pd.DataFrame, cfg: Dict[str, Any]) -> Tuple[pd.DataFrame, pd.DataFrame, str, str, List[str]]:
+    df, id_col, date_col, dim_cols = normalized_results(results, cfg)
+    warmup_days = int(cfg.get("labeling", {}).get("warmup_days", 0))
+    if warmup_days > 0 and df["__time__"].notna().any():
+        cutoff = df["__time__"].min() + pd.Timedelta(days=warmup_days)
+        df = df[df["__time__"] >= cutoff].copy()
+
+    eligible = df[df["__time__"] >= df[date_col]].sort_values([id_col, "__time__"])
+    ta = eligible.groupby(id_col).head(1).copy()
+    return ta, df, id_col, date_col, dim_cols
+
+
+def centroids(hist: pd.DataFrame, dim_cols: List[str]) -> Dict[int, np.ndarray]:
+    assigned = hist[hist["__topic__"] != -1]
+    out: Dict[int, np.ndarray] = {}
+    if assigned.empty:
+        return out
+    for tid, grp in assigned.groupby("__topic__"):
+        out[int(tid)] = grp[dim_cols].to_numpy(dtype=float).mean(axis=0)
+    return out
+
+
+def mahal_stats(hist: pd.DataFrame, dim_cols: List[str]) -> Dict[int, Tuple[np.ndarray, np.ndarray]]:
+    assigned = hist[hist["__topic__"] != -1]
+    out: Dict[int, Tuple[np.ndarray, np.ndarray]] = {}
+    if assigned.empty:
+        return out
+    for tid, grp in assigned.groupby("__topic__"):
+        if len(grp) >= 5:
+            arr = grp[dim_cols].to_numpy(dtype=float)
+            out[int(tid)] = (arr.mean(axis=0), arr.var(axis=0) + 1e-8)
+    return out
+
+
+def dist_to_centroids(x: np.ndarray, cents: Dict[int, np.ndarray]) -> np.ndarray:
+    if not cents:
+        return np.array([])
+    M = np.vstack([cents[k] for k in cents.keys()])
+    return np.sort(np.linalg.norm(M - x[None, :], axis=1))
+
+
+def mahal_nearest(x: np.ndarray, stats: Dict[int, Tuple[np.ndarray, np.ndarray]]) -> float:
+    if not stats:
+        return np.nan
+    vals = []
+    for mu, var in stats.values():
+        z = (x - mu) / np.sqrt(var)
+        vals.append(float((z ** 2).sum()))
+    return float(np.min(vals)) if vals else np.nan
+
+
+def knn_density(X_hist: np.ndarray, x: np.ndarray, k: int) -> Tuple[float, float]:
+    if len(X_hist) == 0:
+        return np.nan, np.nan
+    k_eff = min(k, len(X_hist))
+    nbrs = NearestNeighbors(n_neighbors=k_eff, metric="euclidean").fit(X_hist)
+    dists, _ = nbrs.kneighbors(x.reshape(1, -1), n_neighbors=k_eff, return_distance=True)
+    d = dists.flatten()
+    return float(np.mean(d)), float(np.std(d))
+
+
+def model_geometric_features(results: pd.DataFrame, cfg: Dict[str, Any]) -> pd.DataFrame:
+    knn_k = int(cfg.get("features", {}).get("knn_k", 20))
+    proto_k = int(cfg.get("features", {}).get("recent_outlier_neighbors", 10))
+    outlier_lookback_days = int(cfg.get("features", {}).get("outlier_lookback_days", 1000))
+
+    ta, df, id_col, _date_col, dim_cols = publication_time_rows(results, cfg)
+    rows: List[Dict[str, Any]] = []
+    for _, row in ta.iterrows():
+        tau = pd.Timestamp(row["__time__"])
+
+        hist_raw = df[df["__time__"] <= tau].copy()
+        hist_raw = hist_raw.sort_values([id_col, "__time__"])
+        hist = hist_raw.groupby(id_col, as_index=False).tail(1).copy()
+
+        x = row[dim_cols].to_numpy(dtype=float)
+
+        d_sorted = dist_to_centroids(x, centroids(hist, dim_cols))
+        d1 = float(d_sorted[0]) if d_sorted.size >= 1 else np.nan
+        d2 = float(d_sorted[1]) if d_sorted.size >= 2 else np.nan
+        margin = d2 - d1 if np.isfinite(d1) and np.isfinite(d2) else np.nan
+        mahal = mahal_nearest(x, mahal_stats(hist, dim_cols))
+        knn_mean, knn_std = knn_density(hist[dim_cols].to_numpy(dtype=float), x, knn_k)
+
+        recent_cut = tau - pd.Timedelta(days=outlier_lookback_days)
+        out_recent = hist[
+            hist["__is_outlier__"]
+            & (hist["__time__"] >= recent_cut)
+        ].copy()
+        has_recent = float(len(out_recent) > 0)
+        n_recent = float(len(out_recent))
+
+        if len(out_recent) > 0:
+            X_out = out_recent[dim_cols].to_numpy(dtype=float)
+            nbrs = NearestNeighbors(n_neighbors=min(proto_k, len(X_out)), metric="euclidean").fit(X_out)
+            dists, _ = nbrs.kneighbors(x.reshape(1, -1), n_neighbors=min(proto_k, len(X_out)), return_distance=True)
+            proto_dist = float(np.mean(dists.flatten()))
+        else:
+            proto_dist = np.nan
+
+        rows.append({
+            id_col: row[id_col],
+            "model": row.get("model", row.get("model_name", row.get("__model__", "model"))),
+            "model_name": row.get("model_name", row.get("model", row.get("__model__", "model"))),
+            "horizon": "TA",
+            "d1_nearest_centroid": d1,
+            "d2_second_centroid": d2,
+            "margin_d2_minus_d1": margin,
+            "mahal_nearest": mahal,
+            "knn_mean_k20": knn_mean,
+            "knn_std_k20": knn_std,
+            "outlier_proto_mean_dist": proto_dist,
+            "outlier_score": float(row.get("outlier_score", np.nan)) if "outlier_score" in row.index else np.nan,
+            "has_recent_outliers": has_recent,
+            "n_recent_outliers": n_recent,
+        })
+
+    out = pd.DataFrame(rows)
+    raw_geom = [
+        "d1_nearest_centroid", "d2_second_centroid", "margin_d2_minus_d1",
+        "mahal_nearest", "knn_mean_k20", "knn_std_k20", "outlier_proto_mean_dist",
     ]
+    model_col = "model" if "model" in out.columns else "model_name"
+    for c in raw_geom:
+        out[c + "_pct"] = (
+            out.groupby(model_col)[c]
+               .transform(lambda s: s.rank(method="average") / (s.notna().sum() + 1.0))
+        )
+    out["outlier_score"] = pd.to_numeric(out["outlier_score"], errors="coerce").fillna(0.0)
+    return out
 
-    if df_tests.empty:
-        return pd.DataFrame(columns=test_cols)
 
-    df_tests["paired_t_q_fdr"] = bh_fdr(df_tests["paired_t_p"].values)
+# ---------------------------------------------------------------------------
+# Article-level aggregation
+# ---------------------------------------------------------------------------
 
-    # Significance label is based on the BH-corrected q-value, matching the
-    # paper caption: significance after Benjamini-Hochberg correction.
-    df_tests["paired_t_sig"] = df_tests["paired_t_q_fdr"].apply(significance_label)
-
-    return df_tests[test_cols].copy()
+def aggregate_article_level(long_df: pd.DataFrame, id_col: str, single_features: List[str]) -> pd.DataFrame:
+    geom_cols = [c for c in GEOM_BASE if c in long_df.columns]
+    agg = long_df.groupby(id_col)[geom_cols].agg(["mean", "median", "std"])
+    agg.columns = [f"{a}_{b}" for a, b in agg.columns]
+    agg = agg.reset_index()
+    agg = agg.merge(long_df.groupby(id_col).size().rename("n_models_present").reset_index(), on=id_col, how="left")
+    singles = long_df[[id_col] + [c for c in single_features if c in long_df.columns]].drop_duplicates(id_col)
+    return agg.merge(singles, on=id_col, how="left").fillna(0.0)
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--feature-matrix", required=True)
-    ap.add_argument("--thresholds", nargs="+", type=int, default=list(range(1, 9)))
-    ap.add_argument("--cv-folds", type=int, default=5)
-    ap.add_argument("--random-state", type=int, default=42)
-    ap.add_argument("--include-all-negative-baseline", action="store_true")
-    ap.add_argument("--selected-ablation-k", type=int, default=None)
-    ap.add_argument("--output", required=True)
+    ap.add_argument("--config", required=True)
+    ap.add_argument("--output-dir", default=None)
     args = ap.parse_args()
 
-    df = read_matrix(args.feature_matrix)
-    groups = feature_groups(list(df.columns))
+    cfg = load_config(args.config)
+    root = Path(args.output_dir or cfg["output_dir"])
+    id_col = cfg["input"]["article_id_col"]
+    date_col = cfg["input"]["date_col"]
 
-    rows: List[Dict] = []
-    for k in args.thresholds:
-        rows.extend(evaluate_threshold(
-            df,
-            k,
-            groups,
-            args.random_state,
-            args.cv_folds,
-            include_all_negative_baseline=args.include_all_negative_baseline,
-        ))
+    articles = read_table(cfg["input"]["articles"])
+    if articles is None:
+        raise FileNotFoundError(cfg["input"]["articles"])
+    articles = articles.copy()
+    articles[date_col] = to_dt_naive(articles[date_col])
+    articles = articles.drop_duplicates(id_col)
+    shares = read_table(cfg["input"].get("shares")) if cfg["input"].get("shares") else None
 
-    metrics = pd.DataFrame(rows)
+    txt = text_features(articles, cfg)
+    soc = social_features(shares, articles, cfg)
+    singles = txt.merge(soc, on=id_col, how="outer").fillna(0.0)
 
-    metric_cols = [
-        "outlier_k",
-        "toa_k",
-        "toa_max_neg",
-        "cv_n_splits",
-        "clf_name",
-        "ablation",
-        "n_articles",
-        "n_pos_articles_est",
-        "n_neg_articles_est",
-        "F1_mean",
-        "F1_std",
-        "Precision_mean",
-        "Precision_std",
-        "Recall_mean",
-        "Recall_std",
-    ]
-    metrics = metrics[[c for c in metric_cols if c in metrics.columns]].copy()
+    frames = []
+    for p in sorted((root / "models").glob("*/results.csv")):
+        res = pd.read_csv(p)
+        frames.append(model_geometric_features(res, cfg))
+    if not frames:
+        raise FileNotFoundError(f"No model results found in {root / 'models'}")
 
-    out = Path(args.output)
-    out.parent.mkdir(parents=True, exist_ok=True)
+    long_df = pd.concat(frames, ignore_index=True).merge(singles, on=id_col, how="left").fillna(0.0)
+    article_df = aggregate_article_level(long_df, id_col, TEXT_SOCIAL)
 
-    with pd.ExcelWriter(out, engine="openpyxl") as xw:
-        metrics.to_excel(xw, sheet_name="ml_metrics_with_ablation", index=False)
-
-        if args.selected_ablation_k is not None:
-            df_fold = selected_setting_fold_ablation(
-                df=df,
-                selected_k=args.selected_ablation_k,
-                groups=groups,
-                random_state=args.random_state,
-                cv_folds=args.cv_folds,
-            )
-            df_tests = paired_ablation_tests(
-                df_fold=df_fold,
-                selected_k=args.selected_ablation_k,
-            )
-
-            df_fold.to_excel(xw, sheet_name="fold_ablation", index=False)
-            df_tests.to_excel(xw, sheet_name="fold_ablation_paired_tests", index=False)
-
-    print(f"wrote {out}")
+    long_df.to_csv(root / "feature_long_model_level.csv", index=False)
+    article_df.to_csv(root / "feature_article_level.csv", index=False)
+    print(f"wrote {root / 'feature_long_model_level.csv'}")
+    print(f"wrote {root / 'feature_article_level.csv'}")
 
 
 if __name__ == "__main__":
