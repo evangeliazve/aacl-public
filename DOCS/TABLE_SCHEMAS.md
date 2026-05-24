@@ -1,8 +1,6 @@
 # Table Schemas
 
-This document describes the tabular outputs released with the repository.
-
-The main machine-learning result workbooks are:
+This document describes the released machine-learning result workbooks.
 
 ```text
 RESULTS/hydronewsfr/hydronewsfr_results.xlsx
@@ -17,14 +15,14 @@ fold_ablation
 fold_ablation_paired_tests
 ```
 
-The released workbooks report the diagonal agreement settings used in the paper, where:
+The released experiments use the diagonal consensus rule:
 
 ```text
 outlier_k = toa_k = agreement_k
 toa_max_neg = 0
 ```
 
-For the selected ablation-significance setting, the paper uses:
+The selected settings used for the ablation table are:
 
 ```text
 HYDRONEWSFR:   k = 4 -> (4, 4, 0)
@@ -33,12 +31,172 @@ CLIMATENEWSFR: k = 6 -> (6, 6, 0)
 
 ---
 
-## Workbook: `hydronewsfr_results.xlsx`
+## Sheet: `ml_metrics_with_ablation`
 
-Path:
+### Purpose
+
+This sheet reports cross-validated supervised-learning results across agreement thresholds.
+
+It includes classifier comparisons and feature-family ablations. Scores are reported as fold means and standard deviations.
+
+### Columns
+
+| Column | Description |
+|---|---|
+| `outlier_k` | Minimum number of embedding models that must classify an article as a publication-time outlier. |
+| `toa_k` | Minimum number of embedding models that must classify an article as anticipatory. |
+| `toa_max_neg` | Maximum number of anticipatory votes allowed for a negative label. |
+| `cv_n_splits` | Number of cross-validation folds. |
+| `clf_name` | Classifier identifier. |
+| `ablation` | Feature-family setting. |
+| `n_articles` | Number of retained labeled articles. |
+| `n_pos_articles_est` | Number of positive articles. |
+| `n_neg_articles_est` | Number of negative articles. |
+| `F1_mean` | Mean F1 score across folds. |
+| `F1_std` | Standard deviation of F1 across folds. |
+| `Precision_mean` | Mean precision across folds. |
+| `Precision_std` | Standard deviation of precision across folds. |
+| `Recall_mean` | Mean recall across folds. |
+| `Recall_std` | Standard deviation of recall across folds. |
+
+### Classifier labels
+
+| Label | Meaning |
+|---|---|
+| `xgb` | XGBoost |
+| `rf` | Random Forest |
+| `logreg` | Logistic Regression |
+| `linear_svc` | Linear Support Vector Classifier |
+| `dt` | Decision Tree |
+| `baseline_all_pos` | Constant-positive baseline |
+
+### Ablation labels
+
+| Label | Meaning |
+|---|---|
+| `all_features` | Geometric, textual, and social features. |
+| `no_geom` | All features except geometric features. |
+| `no_social` | All features except social features. |
+| `no_text` | All features except textual features. |
+| `only_geom` | Geometric features only. |
+| `only_social` | Social features only. |
+| `only_text` | Textual features only. |
+| `baseline` | Baseline row. |
+
+The baseline is reported once per agreement threshold, not once per ablation.
+
+---
+
+## Sheet: `fold_ablation`
+
+### Purpose
+
+This sheet reports fold-level XGBoost ablation results for the selected paper setting.
+
+It is used to support the ablation table and the paired tests in `fold_ablation_paired_tests`.
+
+### Columns
+
+| Column | Description |
+|---|---|
+| `outlier_maj` | Selected outlier-vote threshold. |
+| `toa_min_pos` | Selected positive-label vote threshold. |
+| `toa_max_neg` | Maximum anticipatory votes for a negative label. |
+| `clf_name` | Classifier identifier; this sheet uses `xgb`. |
+| `ablation` | Feature-family setting. |
+| `fold` | Cross-validation fold identifier. |
+| `n_train` | Number of training articles in the fold. |
+| `n_test` | Number of test articles in the fold. |
+| `n_train_pos` | Number of positive training articles. |
+| `n_train_neg` | Number of negative training articles. |
+| `n_test_pos` | Number of positive test articles. |
+| `n_test_neg` | Number of negative test articles. |
+| `n_features` | Number of features used in the ablation setting. |
+| `F1` | Fold-level F1 score. |
+| `Precision` | Fold-level precision. |
+| `Recall` | Fold-level recall. |
+
+---
+
+## Sheet: `fold_ablation_paired_tests`
+
+### Purpose
+
+This sheet reports paired fold-level t-tests for selected XGBoost ablation comparisons.
+
+Tests are computed separately for:
 
 ```text
-RESULTS/hydronewsfr/hydronewsfr_results.xlsx
+F1
+Precision
+Recall
+```
+
+The paper table uses significance symbols only for F1. Precision and recall tests are included as diagnostic results.
+
+### Columns
+
+| Column | Description |
+|---|---|
+| `k` | Selected consensus threshold. |
+| `clf_name` | Classifier identifier; this sheet uses `xgb`. |
+| `metric` | Tested metric: `F1`, `Precision`, or `Recall`. |
+| `reference` | Reference ablation setting. |
+| `comparison` | Compared ablation setting. |
+| `n_folds` | Number of paired folds. |
+| `reference_mean` | Mean score for the reference setting. |
+| `comparison_mean` | Mean score for the comparison setting. |
+| `mean_diff_ref_minus_comp` | Mean paired difference, computed as reference minus comparison. |
+| `std_diff` | Standard deviation of paired fold differences. |
+| `cohens_dz` | Paired-sample effect size. |
+| `paired_t_stat` | Paired t-test statistic. |
+| `paired_t_p` | Raw paired t-test p-value. |
+| `diffs_by_fold` | Fold-level paired differences. |
+| `paired_t_q_fdr` | Benjamini-Hochberg corrected q-value. |
+| `paired_t_sig` | Significance label after Benjamini-Hochberg correction. |
+
+### Comparisons
+
+| Reference | Comparison | Purpose |
+|---|---|---|
+| `all_features` | `no_geom` | Effect of removing geometry. |
+| `all_features` | `no_social` | Effect of removing social features. |
+| `all_features` | `no_text` | Effect of removing text features. |
+| `all_features` | `only_geom` | Difference between full features and geometry only. |
+| `only_geom` | `only_text` | Difference between geometry-only and text-only models. |
+| `only_geom` | `only_social` | Difference between geometry-only and social-only models. |
+
+### Paper-symbol convention
+
+In the paper ablation table:
+
+| Symbol | Meaning |
+|---|---|
+| `†` | Significant F1 drop relative to `all_features` after Benjamini-Hochberg correction. |
+| `‡` | Significant F1 drop relative to `only_geom` after Benjamini-Hochberg correction. |
+
+Precision and recall values are reported in the paper table, but the symbols refer only to F1.
+
+---
+
+## Metric definitions
+
+| Metric | Definition |
+|---|---|
+| `Precision` | Fraction of predicted anticipatory articles that are truly anticipatory. |
+| `Recall` | Fraction of truly anticipatory articles that are predicted as anticipatory. |
+| `F1` | Harmonic mean of precision and recall. |
+
+---
+
+## Consensus notation
+
+| Term | Meaning |
+|---|---|
+| `outlier_k` / `outlier_maj` | Minimum number of models voting that the article is a publication-time outlier. |
+| `toa_k` / `toa_min_pos` | Minimum number of models voting that the article is anticipatory. |
+| `toa_max_neg` | Maximum anticipatory votes allowed for a negative label. |
+| `(k, k, 0)` | Conservative rule requiring at least `k` outlier votes, at least `k` anticipatory votes for positives, and zero anticipatory votes for negatives. |
 ```
 
 Corpus:
