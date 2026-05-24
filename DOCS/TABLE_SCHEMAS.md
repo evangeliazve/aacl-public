@@ -1,232 +1,325 @@
-# Table schemas
+# Table Schemas
 
-This document defines the input, intermediate, and exported tables needed to reproduce the results on a new corpus.
+This document describes the tabular outputs released with the repository.
 
-## 1. Raw article table
+The main machine-learning result workbooks are:
 
-Required columns are configurable in `CONFIG/*.yaml`.
+```text
+RESULTS/hydronewsfr/hydronewsfr_results.xlsx
+RESULTS/climatenewsfr/climatenewsfr_results.xlsx
+```
 
-| Column role | Default column | Type | Required | Description |
-|---|---:|---|---|---|
-| Article identifier | `media_url` | string | yes | Stable article key. A canonical URL is recommended. |
-| Publication date | `publication_date_cleaned` | datetime | yes | Article publication time. Parsed with `pandas.to_datetime`. |
-| Title | `title` | string | yes | Article title. Used in the embedding text and text features. |
-| Lead/body text | `description` | string | yes | Lead paragraph, description, or body text. Used in the embedding text and text features. |
-| URL | `media_url` | string | recommended | Used to match social-sharing data. Can be identical to the article identifier. |
+Each workbook contains three sheets:
 
-Additional columns are preserved only if a downstream custom analysis needs them.
+```text
+ml_metrics_with_ablation
+fold_ablation
+fold_ablation_paired_tests
+```
 
-## 2. Optional social-sharing table
+The released workbooks report the diagonal agreement settings used in the paper, where:
 
-| Column | Type | Required | Description |
-|---|---|---:|---|
-| `media_url` or configured URL column | string | yes | Article URL shared on X. |
-| `user_id` or `author_id` | string | yes | User/account identifier. |
-| `created_at` | datetime | recommended | Share timestamp. If present, only shares at or before publication time are used. |
-| `followers_count` or `user_public_metrics_followers_count` | numeric | optional | User follower count. |
-| `tweet_count` or `user_public_metrics_tweet_count` | numeric | optional | User tweet/status count. |
-| `listed_count` or `user_public_metrics_listed_count` | numeric | optional | User listed count. |
+```text
+outlier_k = toa_k = agreement_k
+toa_max_neg = 0
+```
 
-If no social table is supplied, all social variables are set to zero.
+For the selected ablation-significance setting, the paper uses:
 
-## 3. Model-specific dynamic topic results (`models/<model>/results.csv`)
+```text
+HYDRONEWSFR:   k = 4 -> (4, 4, 0)
+CLIMATENEWSFR: k = 6 -> (6, 6, 0)
+```
 
-Produced by `01_dynamic_topic_reconstruction.py` and consumed by scripts 02 and 04.
+---
 
-| Column | Type | Description |
-|---|---|---|
-| `media_url` or configured article ID | string | Article identifier. |
-| publication date column | datetime | Article publication date. |
-| `snapshot_date` | datetime | Cumulative snapshot date. |
-| `model` | string | Embedding model short name. |
-| `cluster_id` | integer | HDBSCAN cluster label for the snapshot; `-1` is noise/outlier. |
-| `topic_id` | integer | Temporally aligned topic ID; `-1` for outliers. |
-| `is_outlier` | boolean | Whether the article is an outlier in that snapshot. |
-| `outlier_score` | numeric | HDBSCAN GLOSH-style outlierness score. |
-| `umap_0` ... `umap_19` | numeric | Reduced embedding coordinates. Number depends on `clustering.n_components`. |
+## Workbook: `hydronewsfr_results.xlsx`
 
-## 4. Trajectory matrix (`trajectory_matrix.xlsx`)
+Path:
 
-Produced by `02_trajectory_annotation_matrix.py`.
+```text
+RESULTS/hydronewsfr/hydronewsfr_results.xlsx
+```
 
-| Column pattern | Type | Description |
-|---|---|---|
-| `media_url` | string | Article identifier. |
-| `publication_date_cleaned` | datetime | Article publication date. |
-| `outlier_<model>` | 0/1 | Whether the article was an outlier at publication time for the model. |
-| `toa_<model>` | 0/1 | Whether the model assigns the article to an anticipatory outlier trajectory. |
-| `trajectory_<model>` | string | Trajectory category: `TOAfirst`, `TOAlate`, `TODlate`, `Oold`, `other`, or `not_publication_outlier`. |
-| `first_topic_id_<model>` | integer/string | First aligned topic joined after publication-time outlier status. |
-| `first_topic_time_<model>` | datetime | Creation time of the joined topic. |
-| `integration_time_<model>` | datetime | First time the article joins the topic. |
-| `n_outlier_votes` | integer | Number of models identifying the article as a publication-time outlier. |
-| `n_TOA_votes` | integer | Number of models assigning the article to a TOA trajectory. |
-| `n_models` | integer | Number of embedding models in the matrix. |
+Corpus:
 
-## 5. Agreement labels (`agreement_labels.xlsx`)
+```text
+HYDRONEWSFR
+```
 
-Produced by `03_calculate_agreement.py`.
+Main selected setting for the ablation table:
 
-### Sheet: `article_labels`
+```text
+outlier_maj = 4
+toa_min_pos = 4
+toa_max_neg = 0
+```
 
-Contains the trajectory matrix plus one label column per threshold.
+---
 
-| Column | Type | Description |
-|---|---|---|
-| `label_k1`, `label_k2`, ... | 0/1/blank | Consensus label at threshold `k`. `1` means TOA, `0` means confident non-TOA, blank means uncertain/excluded. |
+## Workbook: `climatenewsfr_results.xlsx`
 
-Consensus rule:
+Path:
 
-- Eligible population: `n_outlier_votes >= k`.
-- Positive: `n_TOA_votes >= k`.
-- Negative: `n_TOA_votes <= toa_max_neg`; the paper setting uses `toa_max_neg = 0`.
-- Otherwise: uncertain.
+```text
+RESULTS/climatenewsfr/climatenewsfr_results.xlsx
+```
 
-### Sheet: `agreement_summary`
+Corpus:
 
-| Column | Type | Description |
-|---|---|---|
-| `agreement_k` | integer | Consensus threshold. |
-| `retained` | integer | Number of articles with defined labels. |
-| `positive` | integer | Number of positive TOA articles. |
-| `negative` | integer | Number of negative articles. |
-| `coverage` | numeric | Retained share of all articles. |
-| `fleiss_kappa_TOA_votes` | numeric | Fleiss' kappa over model TOA votes. |
+```text
+CLIMATENEWSFR
+```
 
-## 6. Model-level feature table (`feature_long_model_level.csv`)
+Main selected setting for the ablation table:
 
-Produced by `04_create_features_long_tables.py`.
+```text
+outlier_maj = 6
+toa_min_pos = 6
+toa_max_neg = 0
+```
 
-| Feature | Type | Description |
-|---|---|---|
-| `d1_nearest_centroid_pct` | numeric | Within-model percentile rank of distance to nearest existing topic centroid. |
-| `d2_second_centroid_pct` | numeric | Within-model percentile rank of distance to second-nearest existing topic centroid. |
-| `margin_d2_minus_d1_pct` | numeric | Percentile-ranked difference between second-nearest and nearest centroid distances. |
-| `mahal_nearest_pct` | numeric | Percentile-ranked diagonal Mahalanobis distance to nearest plausible topic cluster. |
-| `knn_mean_k20_pct` | numeric | Percentile-ranked mean distance to the 20 nearest neighbors. |
-| `knn_std_k20_pct` | numeric | Percentile-ranked standard deviation of 20-nearest-neighbor distances. |
-| `outlier_proto_mean_dist_pct` | numeric | Percentile-ranked mean distance to nearest recent outlier articles. |
-| `outlier_score` | numeric | HDBSCAN outlierness score. |
-| `has_recent_outliers` | 0/1 | Whether publication-time outlier pool is non-empty. |
-| `n_recent_outliers` | integer | Number of publication-time outliers in the snapshot. |
-| text/social feature columns | numeric | Article-level values copied to each model row before aggregation. |
+---
 
-## 7. Article-level feature table (`feature_article_level.csv`)
+# Sheet: `ml_metrics_with_ablation`
 
-Produced by `04_create_features_long_tables.py`.
+## Purpose
 
-Geometric model-level features are aggregated by article using `_mean`, `_median`, and `_std`. Text and social features are already article-level and are carried as single values. `n_models_present` records the number of model rows available for the article.
+This sheet reports cross-validated classifier results across the released diagonal agreement settings.
 
-## 8. Exported review matrix (`article-url_target_features_all_k.xlsx`)
+It includes both classifier comparisons and feature-family ablations. Rows are aggregated across cross-validation folds and report means and standard deviations for precision, F1, and recall.
 
-Produced by `05_export_feature_matrix.py`. This is the main shareable supervised-learning table.
+## Columns
 
 | Column | Type | Description |
 |---|---|---|
-| `article_url` | string | Article identifier / URL. |
-| `agreement_k` | integer | Consensus threshold used for the row. |
-| `label_TOA` | 0/1 | Supervised target for that threshold. |
-| `n_models_present` | integer | Number of available embedding-model rows. |
-| `d1_nearest_centroid_pct_mean` | numeric | Mean across models. |
-| `d1_nearest_centroid_pct_median` | numeric | Median across models. |
-| `d1_nearest_centroid_pct_std` | numeric | Standard deviation across models. |
-| `d2_second_centroid_pct_mean` | numeric | Mean across models. |
-| `d2_second_centroid_pct_median` | numeric | Median across models. |
-| `d2_second_centroid_pct_std` | numeric | Standard deviation across models. |
-| `margin_d2_minus_d1_pct_mean` | numeric | Mean across models. |
-| `margin_d2_minus_d1_pct_median` | numeric | Median across models. |
-| `margin_d2_minus_d1_pct_std` | numeric | Standard deviation across models. |
-| `mahal_nearest_pct_mean` | numeric | Mean across models. |
-| `mahal_nearest_pct_median` | numeric | Median across models. |
-| `mahal_nearest_pct_std` | numeric | Standard deviation across models. |
-| `knn_mean_k20_pct_mean` | numeric | Mean across models. |
-| `knn_mean_k20_pct_median` | numeric | Median across models. |
-| `knn_mean_k20_pct_std` | numeric | Standard deviation across models. |
-| `knn_std_k20_pct_mean` | numeric | Mean across models. |
-| `knn_std_k20_pct_median` | numeric | Median across models. |
-| `knn_std_k20_pct_std` | numeric | Standard deviation across models. |
-| `outlier_proto_mean_dist_pct_mean` | numeric | Mean across models. |
-| `outlier_proto_mean_dist_pct_median` | numeric | Median across models. |
-| `outlier_proto_mean_dist_pct_std` | numeric | Standard deviation across models. |
-| `outlier_score_mean` | numeric | Mean across models. |
-| `outlier_score_median` | numeric | Median across models. |
-| `outlier_score_std` | numeric | Standard deviation across models. |
-| `has_recent_outliers_mean` | numeric | Mean across models. |
-| `has_recent_outliers_median` | numeric | Median across models. |
-| `has_recent_outliers_std` | numeric | Standard deviation across models. |
-| `n_recent_outliers_mean` | numeric | Mean across models. |
-| `n_recent_outliers_median` | numeric | Median across models. |
-| `n_recent_outliers_std` | numeric | Standard deviation across models. |
-| `soc_unique_users` | numeric | Number of distinct users sharing the article URL by publication time. |
-| `soc_median_user_public_metrics_followers_count` | numeric | Median follower count of sharing users. |
-| `soc_median_user_public_metrics_tweet_count` | numeric | Median tweet count of sharing users. |
-| `soc_median_user_public_metrics_listed_count` | numeric | Median listed count of sharing users. |
-| `media_weighted_clustering` | numeric | Weighted clustering coefficient in the URL co-sharing graph. |
-| `media_bridge_ratio` | numeric | Share of co-sharing edge weight connecting to other communities. |
-| `media_community_size` | numeric | Size of Louvain community containing the URL node. |
-| `text_subjectivity` | numeric | French TextBlob subjectivity score, or zero fallback. |
-| `text_neutrality` | numeric | `1 - abs(VADER compound)`. |
-| `avg_sentence_len_words` | numeric | Mean sentence length in words. |
-| `avg_word_len_chars` | numeric | Mean word length in characters. |
-| `total_syllables` | numeric | Approximate syllable count. |
-| `avg_syllables_per_word` | numeric | Approximate syllables per word. |
-| `len_chars` | numeric | Character count. |
-| `len_words` | numeric | Word count. |
-| `ner_total_ents` | numeric | Total named entities. |
-| `ner_distinct_ents` | numeric | Distinct named entities. |
-| `ner_person` | numeric | Person entity count. |
-| `ner_org` | numeric | Organization entity count. |
-| `ner_loc` | numeric | Location/GPE entity count. |
-| `ner_misc` | numeric | Other entity count. |
+| `outlier_k` | integer | Minimum number of embedding models that must classify an article as a publication-time outlier. |
+| `toa_k` | integer | Minimum number of embedding models that must assign the article to an anticipatory trajectory for a positive label. |
+| `toa_max_neg` | integer | Maximum number of anticipatory votes allowed for a negative label. In the released diagonal setting, this is `0`. |
+| `cv_n_splits` | integer | Number of cross-validation folds. Usually `5`. |
+| `clf_name` | string | Classifier abbreviation. |
+| `ablation` | string | Feature-family setting used for the row. |
+| `n_articles` | integer | Number of retained labeled articles under the consensus setting. |
+| `n_pos_articles_est` | integer | Number of positive articles, i.e. anticipatory outliers. |
+| `n_neg_articles_est` | integer | Number of negative articles, i.e. non-anticipatory publication-time outliers. |
+| `F1_mean` | float | Mean F1 score across cross-validation folds. |
+| `F1_std` | float | Standard deviation of F1 score across folds. |
+| `Precision_mean` | float | Mean precision across cross-validation folds. |
+| `Precision_std` | float | Standard deviation of precision across folds. |
+| `Recall_mean` | float | Mean recall across cross-validation folds. |
+| `Recall_std` | float | Standard deviation of recall across folds. |
 
-## 9. ML results (`results.xlsx`)
+## Classifier labels
 
-Produced by `06_run_ml_experiments.py`. The released matrices support the diagonal agreement settings `outlier_k = toa_k = agreement_k`, with `toa_max_neg = 0`.
-
-### Sheet: `ml_metrics_with_ablation`
-
-| Column | Type | Description |
-|---|---|---|
-| `horizon` | string | Prediction horizon; default `TA`. |
-| `outlier_k` | integer | Publication-time outlier consensus threshold. In the released reruns, this equals `agreement_k`. |
-| `toa_k` | integer | TOA positive-vote threshold. In the released reruns, this equals `agreement_k`. |
-| `toa_max_neg` | integer | Maximum TOA votes for negatives. |
-| `cv_n_splits` | integer | Number of CV folds. |
-| `clf_name` | string | Classifier or baseline: `xgb`, `rf`, `logreg`, `linear_svc`, `dt`, or `baseline_all_pos`. |
-| `ablation` | string | Feature subset: `all_features`, `no_geom`, `no_social`, `no_text`, `only_geom`, `only_social`, or `only_text`. `baseline` for the baseline. |
-| `n_articles` | integer | Number of retained labeled articles. |
-| `n_pos_articles_est` | integer | Number of positives. |
-| `n_neg_articles_est` | integer | Number of negatives. |
-| `F1_mean`, `F1_std` | numeric | Fold mean and standard deviation. |
-| `Precision_mean`, `Precision_std` | numeric | Fold mean and standard deviation. |
-| `Recall_mean`, `Recall_std` | numeric | Fold mean and standard deviation. |
-| `AP_mean`, `AP_std` | numeric | Average precision fold mean and standard deviation. |
-| `ROC_AUC_mean`, `ROC_AUC_std` | numeric | ROC AUC fold mean and standard deviation. |
-
-## 10. SHAP interpretation workbook
-
-Produced by `07_shap_oof_interpretation.py`.
-
-| Sheet | Description |
+| Value | Meaning |
 |---|---|
-| `xgb_global_shap` | Global feature ranking by mean absolute SHAP value, with Spearman direction diagnostics. |
-| `xgb_local_predictions` | Out-of-fold article predictions. |
-| `xgb_local_shap_long` | Long table of local SHAP values for every article-feature pair. |
+| `xgb` | XGBoost classifier. |
+| `rf` | Random Forest classifier. |
+| `logreg` | Logistic Regression classifier. |
+| `linear_svc` | Linear Support Vector Machine classifier. |
+| `dt` | Decision Tree classifier. |
+| `baseline_all_pos` | Constant-positive baseline that predicts every eligible article as anticipatory. |
 
-## 11. Recommended embedding ensemble
+## Ablation labels
 
-The paper ensemble used the following embedding models:
-
-| Short name | Model |
+| Value | Meaning |
 |---|---|
-| `camembert` | `dangvantuan/sentence-camembert-base` |
-| `solon` | `OrdalieTech/Solon-embeddings-large-0.1` |
-| `miniLM` | `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` |
-| `mpnet` | `sentence-transformers/paraphrase-multilingual-mpnet-base-v2` |
-| `LaBSE` | `sentence-transformers/LaBSE` |
-| `e5-large` | `intfloat/multilingual-e5-large` |
-| `snowflake` | `Snowflake/snowflake-arctic-embed-l-v2.0` |
-| `bge-m3` | `BAAI/bge-m3` |
-| `openai-small` | `openai/text-embedding-3-small` as precomputed embeddings |
-| `gemini` | `gemini/embedding-001` as precomputed embeddings |
-| `mistral` | `mistral/mistral-embed` as precomputed embeddings |
+| `all_features` | Uses the full feature set: geometric, textual, and social predictors. |
+| `no_geom` | Removes geometric predictors from the full feature set. |
+| `no_social` | Removes social predictors from the full feature set. |
+| `no_text` | Removes textual predictors from the full feature set. |
+| `only_geom` | Uses only geometric predictors. |
+| `only_social` | Uses only social predictors. |
+| `only_text` | Uses only textual predictors. |
+| `baseline` | Used only for the `baseline_all_pos` classifier. |
+
+## Notes
+
+The baseline row is reported once per agreement threshold, not once per ablation setting.
+
+The released workbooks keep only the paper metrics:
+
+```text
+Precision
+F1
+Recall
+```
+
+Average precision and ROC AUC are not included in the cleaned release workbooks.
+
+---
+
+# Sheet: `fold_ablation`
+
+## Purpose
+
+This sheet reports fold-level XGBoost ablation results for the selected paper setting.
+
+It contains one row per cross-validation fold and ablation setting. These rows are used to compute the ablation means reported in the paper and to perform the paired fold-level significance tests in `fold_ablation_paired_tests`.
+
+## Selected settings
+
+```text
+HYDRONEWSFR:   outlier_maj = 4, toa_min_pos = 4, toa_max_neg = 0
+CLIMATENEWSFR: outlier_maj = 6, toa_min_pos = 6, toa_max_neg = 0
+```
+
+## Columns
+
+| Column | Type | Description |
+|---|---|---|
+| `outlier_maj` | integer | Minimum number of embedding models that must classify the article as a publication-time outlier. |
+| `toa_min_pos` | integer | Minimum number of embedding models that must assign the article to an anticipatory trajectory for a positive label. |
+| `toa_max_neg` | integer | Maximum number of anticipatory votes allowed for a negative label. |
+| `clf_name` | string | Classifier name. In this sheet, this is `xgb`. |
+| `ablation` | string | Feature-family ablation setting. |
+| `fold` | integer | Cross-validation fold identifier. |
+| `n_train` | integer | Number of training articles in the fold. |
+| `n_test` | integer | Number of test articles in the fold. |
+| `n_train_pos` | integer | Number of positive training articles in the fold. |
+| `n_train_neg` | integer | Number of negative training articles in the fold. |
+| `n_test_pos` | integer | Number of positive test articles in the fold. |
+| `n_test_neg` | integer | Number of negative test articles in the fold. |
+| `n_features` | integer | Number of article-level features used for the ablation setting. |
+| `F1` | float | Fold-level F1 score. |
+| `Precision` | float | Fold-level precision. |
+| `Recall` | float | Fold-level recall. |
+
+## Ablation labels
+
+| Value | Meaning |
+|---|---|
+| `all_features` | Uses the full feature set: geometric, textual, and social predictors. |
+| `only_geom` | Uses only geometric predictors. |
+| `only_text` | Uses only textual predictors. |
+| `only_social` | Uses only social predictors. |
+| `no_geom` | Removes geometric predictors from the full feature set. |
+| `no_social` | Removes social predictors from the full feature set. |
+| `no_text` | Removes textual predictors from the full feature set. |
+
+---
+
+# Sheet: `fold_ablation_paired_tests`
+
+## Purpose
+
+This sheet reports paired fold-level significance tests for the selected XGBoost ablation setting.
+
+The tests compare paired fold-level scores across ablation settings. The same folds are used for the reference and comparison settings, so the paired test is applied to the fold-level differences.
+
+The sheet includes tests for:
+
+```text
+Precision
+F1
+Recall
+```
+
+The paper table uses significance symbols only for F1, because F1 is the primary evaluation metric. Precision and recall tests are retained in the supplementary workbook as diagnostics.
+
+## Columns
+
+| Column | Type | Description |
+|---|---|---|
+| `k` | integer | Selected consensus threshold. This corresponds to `(k, k, 0)`. |
+| `clf_name` | string | Classifier name. In this sheet, this is `xgb`. |
+| `metric` | string | Metric tested. One of `Precision`, `F1`, or `Recall`. |
+| `reference` | string | Reference ablation setting in the paired comparison. |
+| `comparison` | string | Comparison ablation setting in the paired comparison. |
+| `n_folds` | integer | Number of paired folds used in the test. |
+| `reference_mean` | float | Mean score of the reference setting across folds. |
+| `comparison_mean` | float | Mean score of the comparison setting across folds. |
+| `mean_diff_ref_minus_comp` | float | Mean paired difference, computed as `reference - comparison`. Positive values mean the reference setting performs better. |
+| `std_diff` | float | Standard deviation of paired fold-level differences. |
+| `cohens_dz` | float | Paired-sample effect size, computed as the mean paired difference divided by the standard deviation of paired differences. |
+| `paired_t_stat` | float | Paired t-test statistic. |
+| `paired_t_p` | float | Raw paired t-test p-value. |
+| `diffs_by_fold` | string | Comma-separated fold-level paired differences. |
+| `paired_t_q_fdr` | float | Benjamini-Hochberg corrected q-value. |
+| `paired_t_sig` | string | Significance label derived from the raw p-value or corrected value, depending on the export configuration. Typical values are `***`, `**`, `*`, `ns`, or `n/a`. |
+
+## Comparisons
+
+The main comparisons are:
+
+| Reference | Comparison | Purpose |
+|---|---|---|
+| `all_features` | `no_geom` | Tests whether removing geometry hurts performance. |
+| `all_features` | `no_social` | Tests whether removing social features hurts performance. |
+| `all_features` | `no_text` | Tests whether removing textual features hurts performance. |
+| `all_features` | `only_geom` | Tests whether geometry alone differs from the full model. |
+| `only_geom` | `only_text` | Tests whether text-only performance is lower than geometry-only performance. |
+| `only_geom` | `only_social` | Tests whether social-only performance is lower than geometry-only performance. |
+
+## Paper-symbol convention
+
+In the paper ablation table:
+
+| Symbol | Meaning |
+|---|---|
+| `†` | Significant F1 drop relative to `all_features` after Benjamini-Hochberg correction of paired fold-level t-test p-values. |
+| `‡` | Significant F1 drop relative to `only_geom` after Benjamini-Hochberg correction of paired fold-level t-test p-values. |
+
+Precision and recall values are reported in the paper table as complementary diagnostics. Their paired tests are included in this supplementary sheet but are not encoded by the paper-table symbols.
+
+## Recommended caption wording
+
+```latex
+Ablations for XGBoost at \(\Ta\). Results are 5-fold CV means.
+Symbols mark significant \(F_1\) drops after Benjamini--Hochberg correction
+of paired fold-level \(t\)-test \(p\)-values at \(\alpha=0.05\):
+\(^{\dagger}\) indicates a significant drop relative to all features, and
+\(^{\ddagger}\) indicates a significant drop relative to geometry only.
+Precision and recall are reported as complementary diagnostics.
+```
+
+---
+
+# Metric definitions
+
+| Metric | Meaning |
+|---|---|
+| `Precision` | Among articles predicted as anticipatory, the fraction that are truly anticipatory. |
+| `Recall` | Among truly anticipatory articles, the fraction predicted as anticipatory. |
+| `F1` | Harmonic mean of precision and recall. This is the primary metric used for ablation significance in the paper table. |
+
+---
+
+# Consensus-threshold terminology
+
+| Term | Meaning |
+|---|---|
+| `outlier_k` / `outlier_maj` | Minimum number of embedding models that must identify the article as a publication-time outlier. |
+| `toa_k` / `toa_min_pos` | Minimum number of embedding models that must assign the article to an anticipatory trajectory for a positive label. |
+| `toa_max_neg` | Maximum number of anticipatory votes allowed for a negative label. |
+| `(k, k, 0)` | Conservative diagonal rule where outlier eligibility and positive labels both require at least `k` votes, while negatives require zero anticipatory votes. |
+
+---
+
+# Recommended repository consistency checks
+
+Before release, check that:
+
+1. Both result workbooks contain the same three sheets:
+
+```text
+ml_metrics_with_ablation
+fold_ablation
+fold_ablation_paired_tests
+```
+
+2. The released metric columns are limited to:
+
+```text
+Precision
+F1
+Recall
+```
+
+3. `fold_ablation_paired_tests` includes rows for `Precision`, `F1`, and `Recall`.
+
+4. Paper-table symbols are based only on F1 rows from `fold_ablation_paired_tests`.
+
+5. Precision and recall tests remain available in the supplementary workbook as diagnostics.
+
+6. The README and paper caption both state that the table symbols indicate significant F1 drops, not precision or recall drops.
