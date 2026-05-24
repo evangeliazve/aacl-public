@@ -1,27 +1,21 @@
-# Predicting Emerging Topics from Outliers: A Prospective Study of Weak Signals in Embedding Space.
+# Predicting Emerging Topics from Outliers
 
-This repository contains results and reproducibility materials for our EMNLP submission.
+This repository contains reproducibility materials for the paper:
 
-It includes the article-level feature matrices used in the supervised experiments, released result workbooks, agreement tables, SHAP interpretation tables, data-collection scripts, and scripts for rerunning the experiments on other data.
+```text
+Predicting Emerging Topics from Outliers:
+A Prospective Study of Weak Signals in Embedding Space
+```
+
+The repository provides released feature matrices, machine-learning results, agreement outputs, SHAP interpretation tables, and scripts for reproducing the supervised-stage experiments.
+
+---
 
 ## Repository structure
 
 ```text
 CONFIG/
   config.example.yaml
-
-SCRIPTS/
-  00_validate_inputs.py
-  01_dynamic_topic_reconstruction.py
-  02_trajectory_annotation_matrix.py
-  03_calculate_agreement.py
-  04_create_features_long_tables.py
-  05_export_feature_matrix.py
-  06_run_ml_experiments.py
-  07_shap_oof_interpretation.py
-
-DOCS/
-  TABLE_SCHEMAS.md
 
 DATA/
   README.md
@@ -30,6 +24,9 @@ DATA/
     climatenewsfr_data_collection_X.py
   climatenewsfr_article-url_target_features_all_k.xlsx
   hydronewsfr_article-url_target_features_all_k.xlsx
+
+DOCS/
+  TABLE_SCHEMAS.md
 
 RESULTS/
   agreement/
@@ -42,6 +39,16 @@ RESULTS/
     hydronewsfr_results.xlsx
     hydronewsfr_interpretability_k440_xgboost.xlsx
 
+SCRIPTS/
+  00_validate_inputs.py
+  01_dynamic_topic_reconstruction.py
+  02_trajectory_annotation_matrix.py
+  03_calculate_agreement.py
+  04_create_features_long_tables.py
+  05_export_feature_matrix.py
+  06_run_ml_experiments.py
+  07_shap_oof_interpretation.py
+
 APPENDIX/
   ml_feature_glossary.xlsx
   additional_experiments/
@@ -52,43 +59,37 @@ run_all.sh
 README.md
 ```
 
-## Released data and result files
+---
 
-### Article-level feature matrices
+## Released feature matrices
 
 ```text
 DATA/hydronewsfr_article-url_target_features_all_k.xlsx
 DATA/climatenewsfr_article-url_target_features_all_k.xlsx
 ```
 
-Each workbook has one sheet, `feature_matrix`. Rows are article-threshold pairs. The main columns are:
-
-- `article_url`: URL used as the article identifier in the released matrix;
-- `agreement_k`: released diagonal agreement threshold, with `agreement_k = outlier_k = toa_k`;
-- `label_TOA`: binary supervised target, where 1 marks a consensus anticipatory outlier and 0 marks a confident non-anticipatory publication-time outlier;
-- `n_models_present`: number of embedding-model representations available for the article;
-- geometric, text, named-entity, and social/co-sharing features used by scripts 6 and 7.
-
-The released feature matrices contain `agreement_k` values 1 through 8.
-
-
-### Data-collection scripts
+Each workbook contains one sheet:
 
 ```text
-DATA/collection_scripts/climatenewsfr_data_collection_googlenews.py
-DATA/collection_scripts/climatenewsfr_data_collection_X.py
-
-News articles were collected using the GNews Python library:
-https://github.com/ranahaani/GNews
-
-X posts were collected through the X API:
-https://docs.x.com/x-api/introduction
-
+feature_matrix
 ```
 
-These scripts document the collection procedure used to construct the CLIMATENEWSFR corpus from Google News results and observed X-sharing activity. They are provided to support reuse of the collection pipeline on new local corpora.
+Rows correspond to article-threshold pairs. The main columns are:
 
-### Machine-learning result workbooks
+| Column | Description |
+|---|---|
+| `article_url` | Article identifier used in the released matrix. |
+| `agreement_k` | Diagonal consensus threshold, with `agreement_k = outlier_k = toa_k`. |
+| `label_TOA` | Binary supervised label. `1` denotes a consensus anticipatory outlier; `0` denotes a confident non-anticipatory publication-time outlier. |
+| `n_models_present` | Number of embedding-model representations available for the article. |
+
+The remaining columns are article-level geometric, textual, named-entity, and social/co-sharing features.
+
+The released matrices include `agreement_k` values from 1 to 8.
+
+---
+
+## Machine-learning result workbooks
 
 ```text
 RESULTS/hydronewsfr/hydronewsfr_results.xlsx
@@ -103,41 +104,18 @@ fold_ablation
 fold_ablation_paired_tests
 ```
 
-#### `ml_metrics_with_ablation`
+### `ml_metrics_with_ablation`
 
-This sheet reports cross-validated classifier results for the released diagonal agreement settings, where:
+This sheet reports cross-validated supervised-learning results across agreement thresholds.
+
+It includes classifier comparisons and feature-family ablations under the diagonal rule:
 
 ```text
 outlier_k = toa_k = agreement_k
 toa_max_neg = 0
 ```
 
-The columns include `horizon`, `outlier_k`, `toa_k`, `toa_max_neg`, `cv_n_splits`, `clf_name`, `ablation`, `n_articles`, class counts, and fold means/standard deviations for precision, F1, and recall.
-
-The supervised models are abbreviated as follows: `xgb` denotes XGBoost, `rf` Random Forest, `logreg` Logistic Regression, `linear_svc` a linear Support Vector Machine, and `dt` a Decision Tree classifier.
-
-The ablation labels describe which feature families are used. `all_features` includes the full set of geometric, textual, and social predictors. `no_geom`, `no_social`, and `no_text` remove one feature family at a time. `only_geom`, `only_social`, and `only_text` keep only the corresponding feature family.
-
-The baseline row is `baseline_all_pos`. It is reported once per agreement threshold, not once per ablation; its ablation field is `baseline`.
-
-#### `fold_ablation`
-
-This sheet reports fold-level XGBoost ablation results for the selected paper setting:
-
-```text
-HYDRONEWSFR:   k = 4 -> (4, 4, 0)
-CLIMATENEWSFR: k = 6 -> (6, 6, 0)
-```
-
-It contains one row per cross-validation fold and ablation setting. The columns include the selected consensus thresholds, classifier name, ablation label, fold identifier, train/test sizes, train/test class counts, number of features, and fold-level precision, F1, and recall.
-
-These fold-level values are used to compute the ablation means reported in the paper.
-
-#### `fold_ablation_paired_tests`
-
-This sheet reports paired fold-level significance tests for the selected XGBoost ablation setting.
-
-The included metrics are:
+The reported metrics are:
 
 ```text
 Precision
@@ -145,74 +123,123 @@ F1
 Recall
 ```
 
-For each metric and ablation comparison, the sheet reports the reference setting, comparison setting, number of folds, mean scores, fold-level mean difference, standard deviation of the fold differences, paired t statistic, raw paired t-test p-value, Benjamini-Hochberg corrected q-value, and significance label.
+The classifier labels are:
 
-The paper's ablation-table symbols are based on significant F1 drops after Benjamini-Hochberg correction of paired fold-level t-test p-values. Precision and recall tests are provided as diagnostics to show whether F1 changes reflect losses in one or both components.
+| Label | Classifier |
+|---|---|
+| `xgb` | XGBoost |
+| `rf` | Random Forest |
+| `logreg` | Logistic Regression |
+| `linear_svc` | Linear Support Vector Classifier |
+| `dt` | Decision Tree |
+| `baseline_all_pos` | Constant-positive baseline |
 
-The main comparisons are:
+The ablation labels are:
+
+| Label | Description |
+|---|---|
+| `all_features` | Geometric, textual, and social features. |
+| `no_geom` | All features except geometric features. |
+| `no_social` | All features except social features. |
+| `no_text` | All features except textual features. |
+| `only_geom` | Geometric features only. |
+| `only_social` | Social features only. |
+| `only_text` | Textual features only. |
+| `baseline` | Baseline row. |
+
+The baseline is reported once per agreement threshold.
+
+### `fold_ablation`
+
+This sheet reports fold-level XGBoost ablation results for the selected paper settings:
 
 ```text
-all_features vs no_geom
-all_features vs no_social
-all_features vs no_text
-all_features vs only_geom
-only_geom vs only_text
-only_geom vs only_social
+HYDRONEWSFR:   k = 4 -> (4, 4, 0)
+CLIMATENEWSFR: k = 6 -> (6, 6, 0)
 ```
 
-In the paper table, `†` indicates a significant F1 drop relative to `all_features`, and `‡` indicates a significant F1 drop relative to `only_geom`.
+It contains one row per cross-validation fold and ablation setting.
 
-### Agreement matrices
+### `fold_ablation_paired_tests`
+
+This sheet reports paired fold-level t-tests for selected XGBoost ablation comparisons.
+
+Tests are reported for:
+
+```text
+F1
+Precision
+Recall
+```
+
+The paper table uses significance symbols only for F1. Precision and recall tests are included as diagnostic results.
+
+In the paper ablation table:
+
+| Symbol | Meaning |
+|---|---|
+| `†` | Significant F1 drop relative to `all_features` after Benjamini-Hochberg correction. |
+| `‡` | Significant F1 drop relative to `only_geom` after Benjamini-Hochberg correction. |
+
+The detailed column schema is provided in:
+
+```text
+DOCS/TABLE_SCHEMAS.md
+```
+
+---
+
+## Agreement outputs
 
 ```text
 RESULTS/agreement/agreement_hdbscan_th30_d20.xlsx
 RESULTS/agreement/agreement_hdbscan_th30_d20_climat.xlsx
 ```
 
-These workbooks contain the model-by-model trajectory labels and agreement summaries. The sheet `TOA matrix and agreement` includes the article URL, publication date, first-topic information, one trajectory column per embedding model, and agreement counts such as TOA vote counts and publication-time outlier vote counts.
+These workbooks contain model-specific trajectory labels and agreement summaries.
 
-### SHAP interpretation workbooks
+The main sheet is:
+
+```text
+TOA matrix and agreement
+```
+
+It includes article identifiers, publication dates, model-specific trajectory assignments, and agreement counts such as anticipatory votes and publication-time outlier votes.
+
+---
+
+## SHAP interpretation workbooks
 
 ```text
 RESULTS/hydronewsfr/hydronewsfr_interpretability_k440_xgboost.xlsx
 RESULTS/climatenewsfr/climatenewsfr_interpretability_k660_xgboost.xlsx
 ```
 
-The filename tag encodes the selected diagonal agreement rule:
+The filename encodes the selected consensus rule:
 
-- `k440`: `outlier_k=4`, `toa_k=4`, `toa_max_neg=0`;
-- `k660`: `outlier_k=6`, `toa_k=6`, `toa_max_neg=0`.
-
-Each workbook contains three sheets:
-
-- `xgb_global_shap`: global feature importance and direction diagnostics;
-- `xgb_oof_local_shap`: out-of-fold predicted probabilities for individual articles;
-- `xgb_local_shap`: article-feature-level SHAP contributions.
-
-### Appendix files
-
-`APPENDIX/ml_feature_glossary.xlsx` provides the released feature glossary. Additional robustness and correlation tables are in `APPENDIX/additional_experiments/`.
-
-## Release sanity checks
-
-The files in this release have the following expected structure:
-
-| File | Expected structure |
+| Tag | Meaning |
 |---|---|
-| `DATA/hydronewsfr_article-url_target_features_all_k.xlsx` | `feature_matrix`, 3,338 rows, `agreement_k` 1–8 |
-| `DATA/climatenewsfr_article-url_target_features_all_k.xlsx` | `feature_matrix`, 6,501 rows, `agreement_k` 1–8 |
-| `RESULTS/hydronewsfr/hydronewsfr_results.xlsx` | `ml_metrics_with_ablation`, 288 rows |
-| `RESULTS/climatenewsfr/climatenewsfr_results.xlsx` | `ml_metrics_with_ablation`, 288 rows |
-| `RESULTS/hydronewsfr/hydronewsfr_interpretability_k440_xgboost.xlsx` | 3 SHAP sheets |
-| `RESULTS/climatenewsfr/climatenewsfr_interpretability_k660_xgboost.xlsx` | 3 SHAP sheets |
+| `k440` | `outlier_k=4`, `toa_k=4`, `toa_max_neg=0` |
+| `k660` | `outlier_k=6`, `toa_k=6`, `toa_max_neg=0` |
 
-The ML result workbooks contain 8 thresholds. For each threshold there is one `baseline_all_pos` row and 35 classifier-ablation rows: 5 classifiers × 7 ablations.
+Each workbook contains SHAP-based interpretation outputs for the selected XGBoost model.
 
-## Raw data and redistribution
+---
 
-The original article text, collection files, raw social-media traces, and some embedding caches are not redistributed because they may be subject to publisher, API, or platform restrictions.
+## Data collection scripts
 
-The released feature matrices provide URLs, consensus labels, and engineered features. They support inspection and supervised-stage reruns without redistributing restricted raw content. The collection and analysis pipeline can be applied to a new local corpus that follows the schemas in `DOCS/TABLE_SCHEMAS.md`.
+```text
+DATA/collection_scripts/climatenewsfr_data_collection_googlenews.py
+DATA/collection_scripts/climatenewsfr_data_collection_X.py
+```
+
+These scripts document the collection procedure used for the CLIMATENEWSFR corpus.
+
+News articles were collected with the GNews Python library. X-sharing activity was collected through the X API.
+
+Raw article text, raw social-media traces, and private collection files are not redistributed.
+
+---
 
 ## Installation
 
@@ -233,9 +260,11 @@ conda activate topic-outlier-reproduction
 python -m spacy download fr_core_news_md
 ```
 
-The French spaCy model is used for named-entity features. If it is not installed, named-entity counts are set to zero by the feature script.
+The French spaCy model is used for named-entity features.
 
-## Rerun the supervised stage from the released feature matrices
+---
+
+## Reproduce supervised-stage results from released feature matrices
 
 HYDRONEWSFR:
 
@@ -243,8 +272,29 @@ HYDRONEWSFR:
 python SCRIPTS/06_run_ml_experiments.py \
   --feature-matrix DATA/hydronewsfr_article-url_target_features_all_k.xlsx \
   --thresholds 1 2 3 4 5 6 7 8 \
+  --selected-ablation-k 4 \
   --output RESULTS/hydronewsfr/hydronewsfr_results_rerun.xlsx
+```
 
+CLIMATENEWSFR:
+
+```bash
+python SCRIPTS/06_run_ml_experiments.py \
+  --feature-matrix DATA/climatenewsfr_article-url_target_features_all_k.xlsx \
+  --thresholds 1 2 3 4 5 6 7 8 \
+  --selected-ablation-k 6 \
+  --output RESULTS/climatenewsfr/climatenewsfr_results_rerun.xlsx
+```
+
+Because the supervised models include stochastic components, rerun values may differ slightly from the archived result workbooks.
+
+---
+
+## Reproduce SHAP interpretation outputs
+
+HYDRONEWSFR:
+
+```bash
 python SCRIPTS/07_shap_oof_interpretation.py \
   --feature-matrix DATA/hydronewsfr_article-url_target_features_all_k.xlsx \
   --agreement-k 4 \
@@ -255,11 +305,6 @@ python SCRIPTS/07_shap_oof_interpretation.py \
 CLIMATENEWSFR:
 
 ```bash
-python SCRIPTS/06_run_ml_experiments.py \
-  --feature-matrix DATA/climatenewsfr_article-url_target_features_all_k.xlsx \
-  --thresholds 1 2 3 4 5 6 7 8 \
-  --output RESULTS/climatenewsfr/climatenewsfr_results_rerun.xlsx
-
 python SCRIPTS/07_shap_oof_interpretation.py \
   --feature-matrix DATA/climatenewsfr_article-url_target_features_all_k.xlsx \
   --agreement-k 6 \
@@ -267,42 +312,32 @@ python SCRIPTS/07_shap_oof_interpretation.py \
   --output RESULTS/climatenewsfr/climatenewsfr_interpretability_k660_xgboost_rerun.xlsx
 ```
 
-Because the estimators use stochastic components, rerun values may differ slightly from the released workbooks even with `random_state=42`. The expected structure is one `ml_metrics_with_ablation` sheet for ML results and three SHAP sheets for interpretation.
-
-## Run the workflow on a new local corpus
-
-Copy the example configuration and edit the local paths:
-
-```bash
-cp CONFIG/config.example.yaml CONFIG/my_corpus.yaml
-```
-
-At minimum, the article table should contain a stable article identifier or canonical URL, a publication date, a title, and a lead/body-text field. Social-sharing data are optional; if no sharing file is provided, social features are filled with zeros.
-
-Run the full sequence:
-
-```bash
-bash run_all.sh CONFIG/my_corpus.yaml
-```
-
-The example configuration assumes private local inputs under `DATA/private/`. Those files are not included in this repository.
+---
 
 ## Pipeline scripts
 
-1. `00_validate_inputs.py`: checks required columns, date parsing, optional social-sharing data, and configured embedding files.
-2. `01_dynamic_topic_reconstruction.py`: builds cumulative daily topic snapshots for each embedding model.
-3. `02_trajectory_annotation_matrix.py`: builds the model-by-model article trajectory matrix.
-4. `03_calculate_agreement.py`: creates consensus labels for thresholds `k`.
-5. `04_create_features_long_tables.py`: creates publication-time geometric, text, and social features.
-6. `05_export_feature_matrix.py`: exports the shareable article-threshold feature matrix.
-7. `06_run_ml_experiments.py`: runs classifiers, the `baseline_all_pos` baseline, and the released feature-family ablations.
-8. `07_shap_oof_interpretation.py`: computes global XGBoost SHAP summaries and out-of-fold local SHAP tables for the selected agreement threshold.
+| Script | Purpose |
+|---|---|
+| `00_validate_inputs.py` | Validate local input files. |
+| `01_dynamic_topic_reconstruction.py` | Build cumulative daily topic snapshots. |
+| `02_trajectory_annotation_matrix.py` | Build model-specific article trajectory labels. |
+| `03_calculate_agreement.py` | Compute agreement-based consensus labels. |
+| `04_create_features_long_tables.py` | Create publication-time feature tables. |
+| `05_export_feature_matrix.py` | Export the released article-threshold feature matrix. |
+| `06_run_ml_experiments.py` | Run supervised models, ablations, and selected-setting paired ablation tests. |
+| `07_shap_oof_interpretation.py` | Compute XGBoost SHAP interpretation outputs. |
+
+---
 
 ## Main experimental settings
 
-The paper setting uses cumulative daily snapshots, UMAP with 20 dimensions, HDBSCAN clustering, centroid-based topic alignment with threshold `0.30`, and an ensemble of embedding models. The supervised task is evaluated at publication time. The first `labeling.warmup_days` cumulative snapshots are excluded before trajectory annotation and publication-time feature extraction, matching the notebook warm-up filtering used to avoid unstable early clustering snapshots.
+The main experiments use cumulative daily snapshots, UMAP with 20 dimensions, HDBSCAN clustering, centroid-based topic alignment with threshold `0.30`, and an ensemble of embedding models.
 
-The main selected agreement thresholds are:
+The selected agreement thresholds are:
 
-- HYDRONEWSFR: `outlier_k=4`, `toa_k=4`, `toa_max_neg=0`;
-- CLIMATENEWSFR: `outlier_k=6`, `toa_k=6`, `toa_max_neg=0`.
+```text
+HYDRONEWSFR:   outlier_k=4, toa_k=4, toa_max_neg=0
+CLIMATENEWSFR: outlier_k=6, toa_k=6, toa_max_neg=0
+```
+
+The supervised task is evaluated at publication time.
