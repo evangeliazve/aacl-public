@@ -225,9 +225,9 @@ DATA/collection_scripts/climatenewsfr_data_collection_googlenews.py
 DATA/collection_scripts/climatenewsfr_data_collection_X.py
 ```
 
-These scripts document the collection procedure used for the CLIMATENEWSFR corpus.
+These scripts document the collection procedure used for the CLIMATENEWSFR corpus. They are parameterized command-line scripts and do not execute at import time.
 
-News articles were collected with the GNews Python library. X-sharing activity was collected through the X API.
+News articles were collected with Google News RSS/decoding utilities. X-sharing activity was collected through the X API.
 
 Raw article text, raw social-media traces, and private collection files are not redistributed.
 
@@ -279,6 +279,8 @@ python SCRIPTS/06_run_ml_experiments.py \
 ```
 
 Rerun values may differ slightly from the archived workbooks because some estimators include stochastic components.
+
+Expected runtime depends on hardware. The supervised-stage ML scripts run from the released feature matrices and are substantially faster than the full trajectory-reconstruction pipeline. The full pipeline requires local article data, embeddings/API outputs, and may take considerably longer.
 
 ---
 
