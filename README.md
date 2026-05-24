@@ -1,17 +1,17 @@
 # Predicting Emerging Topics from Outliers
 
-This repository contains reproducibility materials for the paper:
+Reproducibility materials for:
 
 ```text
 Predicting Emerging Topics from Outliers:
 A Prospective Study of Weak Signals in Embedding Space
 ```
 
-The repository provides released feature matrices, machine-learning results, agreement outputs, SHAP interpretation tables, and scripts for reproducing the supervised-stage experiments.
+The repository includes the released feature matrices, machine-learning result workbooks, agreement outputs, SHAP interpretation tables, and scripts used to rerun the supervised-stage experiments.
 
 ---
 
-## Repository structure
+## Repository layout
 
 ```text
 CONFIG/
@@ -68,35 +68,31 @@ DATA/hydronewsfr_article-url_target_features_all_k.xlsx
 DATA/climatenewsfr_article-url_target_features_all_k.xlsx
 ```
 
-Each workbook contains one sheet:
+Each workbook contains a `feature_matrix` sheet. Rows correspond to article-threshold pairs.
 
-```text
-feature_matrix
-```
-
-Rows correspond to article-threshold pairs. The main columns are:
+Main columns:
 
 | Column | Description |
 |---|---|
 | `article_url` | Article identifier used in the released matrix. |
 | `agreement_k` | Diagonal consensus threshold, with `agreement_k = outlier_k = toa_k`. |
-| `label_TOA` | Binary supervised label. `1` denotes a consensus anticipatory outlier; `0` denotes a confident non-anticipatory publication-time outlier. |
+| `label_TOA` | Binary supervised label. `1` indicates a consensus anticipatory outlier; `0` indicates a confident non-anticipatory publication-time outlier. |
 | `n_models_present` | Number of embedding-model representations available for the article. |
 
-The remaining columns are article-level geometric, textual, named-entity, and social/co-sharing features.
+The remaining columns are the geometric, textual, named-entity, and social/co-sharing features used in the supervised models.
 
 The released matrices include `agreement_k` values from 1 to 8.
 
 ---
 
-## Machine-learning result workbooks
+## Machine-learning results
 
 ```text
 RESULTS/hydronewsfr/hydronewsfr_results.xlsx
 RESULTS/climatenewsfr/climatenewsfr_results.xlsx
 ```
 
-Each workbook contains three sheets:
+Each workbook contains:
 
 ```text
 ml_metrics_with_ablation
@@ -106,16 +102,16 @@ fold_ablation_paired_tests
 
 ### `ml_metrics_with_ablation`
 
-This sheet reports cross-validated supervised-learning results across agreement thresholds.
+Cross-validated supervised-learning results across agreement thresholds.
 
-It includes classifier comparisons and feature-family ablations under the diagonal rule:
+The sheet uses the diagonal rule:
 
 ```text
 outlier_k = toa_k = agreement_k
 toa_max_neg = 0
 ```
 
-The reported metrics are:
+Reported metrics:
 
 ```text
 Precision
@@ -123,7 +119,7 @@ F1
 Recall
 ```
 
-The classifier labels are:
+Classifier labels:
 
 | Label | Classifier |
 |---|---|
@@ -134,7 +130,7 @@ The classifier labels are:
 | `dt` | Decision Tree |
 | `baseline_all_pos` | Constant-positive baseline |
 
-The ablation labels are:
+Ablation labels:
 
 | Label | Description |
 |---|---|
@@ -151,20 +147,20 @@ The baseline is reported once per agreement threshold.
 
 ### `fold_ablation`
 
-This sheet reports fold-level XGBoost ablation results for the selected paper settings:
+Fold-level XGBoost ablation results for the selected paper settings:
 
 ```text
 HYDRONEWSFR:   k = 4 -> (4, 4, 0)
 CLIMATENEWSFR: k = 6 -> (6, 6, 0)
 ```
 
-It contains one row per cross-validation fold and ablation setting.
+This sheet contains one row per cross-validation fold and ablation setting.
 
 ### `fold_ablation_paired_tests`
 
-This sheet reports paired fold-level t-tests for selected XGBoost ablation comparisons.
+Paired fold-level t-tests for the selected XGBoost ablation comparisons.
 
-Tests are reported for:
+The sheet reports tests for:
 
 ```text
 F1
@@ -172,16 +168,16 @@ Precision
 Recall
 ```
 
-The paper table uses significance symbols only for F1. Precision and recall tests are included as diagnostic results.
+The paper table uses significance symbols only for F1. Precision and recall tests are included to document whether the F1 changes are driven by one or both components.
 
-In the paper ablation table:
+Paper-symbol convention:
 
 | Symbol | Meaning |
 |---|---|
 | `†` | Significant F1 drop relative to `all_features` after Benjamini-Hochberg correction. |
 | `‡` | Significant F1 drop relative to `only_geom` after Benjamini-Hochberg correction. |
 
-The detailed column schema is provided in:
+Detailed column descriptions are in:
 
 ```text
 DOCS/TABLE_SCHEMAS.md
@@ -204,25 +200,25 @@ The main sheet is:
 TOA matrix and agreement
 ```
 
-It includes article identifiers, publication dates, model-specific trajectory assignments, and agreement counts such as anticipatory votes and publication-time outlier votes.
+It includes article identifiers, publication dates, model-specific trajectory assignments, anticipatory-vote counts, and publication-time outlier-vote counts.
 
 ---
 
-## SHAP interpretation workbooks
+## SHAP interpretation outputs
 
 ```text
 RESULTS/hydronewsfr/hydronewsfr_interpretability_k440_xgboost.xlsx
 RESULTS/climatenewsfr/climatenewsfr_interpretability_k660_xgboost.xlsx
 ```
 
-The filename encodes the selected consensus rule:
+The filename tag encodes the selected consensus rule:
 
 | Tag | Meaning |
 |---|---|
 | `k440` | `outlier_k=4`, `toa_k=4`, `toa_max_neg=0` |
 | `k660` | `outlier_k=6`, `toa_k=6`, `toa_max_neg=0` |
 
-Each workbook contains SHAP-based interpretation outputs for the selected XGBoost model.
+These workbooks contain the global and local SHAP outputs for the selected XGBoost models.
 
 ---
 
@@ -264,7 +260,7 @@ The French spaCy model is used for named-entity features.
 
 ---
 
-## Reproduce supervised-stage results from released feature matrices
+## Rerun supervised-stage experiments
 
 HYDRONEWSFR:
 
@@ -286,11 +282,11 @@ python SCRIPTS/06_run_ml_experiments.py \
   --output RESULTS/climatenewsfr/climatenewsfr_results_rerun.xlsx
 ```
 
-Because the supervised models include stochastic components, rerun values may differ slightly from the archived result workbooks.
+Rerun values may differ slightly from the archived workbooks because some estimators include stochastic components.
 
 ---
 
-## Reproduce SHAP interpretation outputs
+## Rerun SHAP interpretation
 
 HYDRONEWSFR:
 
@@ -323,7 +319,7 @@ python SCRIPTS/07_shap_oof_interpretation.py \
 | `02_trajectory_annotation_matrix.py` | Build model-specific article trajectory labels. |
 | `03_calculate_agreement.py` | Compute agreement-based consensus labels. |
 | `04_create_features_long_tables.py` | Create publication-time feature tables. |
-| `05_export_feature_matrix.py` | Export the released article-threshold feature matrix. |
+| `05_export_feature_matrix.py` | Export the article-threshold feature matrix. |
 | `06_run_ml_experiments.py` | Run supervised models, ablations, and selected-setting paired ablation tests. |
 | `07_shap_oof_interpretation.py` | Compute XGBoost SHAP interpretation outputs. |
 
@@ -333,7 +329,7 @@ python SCRIPTS/07_shap_oof_interpretation.py \
 
 The main experiments use cumulative daily snapshots, UMAP with 20 dimensions, HDBSCAN clustering, centroid-based topic alignment with threshold `0.30`, and an ensemble of embedding models.
 
-The selected agreement thresholds are:
+Selected agreement thresholds:
 
 ```text
 HYDRONEWSFR:   outlier_k=4, toa_k=4, toa_max_neg=0
