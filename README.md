@@ -7,7 +7,7 @@ The repository includes the released feature matrices, machine-learning result w
 
 ---
 
-## Repository layout
+## Repository structure
 
 ```text
 CONFIG/
