@@ -1,47 +1,88 @@
-"""Collect French climate-change news articles from Google News RSS.
-
-This script documents the collection procedure used for the CLIMATENEWSFR
-corpus. It is intentionally parameterized and does not execute at import time.
+#!/usr/bin/env python3
+"""
+Collect French climate-change news articles with the GNews Python library.
 
 Example:
-    python DATA/collection_scripts/climatenewsfr_data_collection_googlenews.py \
+    python climatenewsfr_data_collection_gnews.py \
         --start-date 2025-04-02 \
         --end-date 2025-05-25 \
-        --output DATA/private/climatenewsfr/articles_climate_cleaned.xlsx
+        --query "changement climatique" \
+        --output articles_climate_cleaned.xlsx
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import re
 import time
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
 
-import feedparser
 import pandas as pd
-import requests
-from bs4 import BeautifulSoup
-from googlenewsdecoder import gnewsdecoder
+from gnews import GNews
 
 
 DEFAULT_QUERY = "changement climatique"
-DEFAULT_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/123.0.0.0 Safari/537.36"
-    )
-}
+DEFAULT_START_DATE = "2025-04-02"
+DEFAULT_END_DATE = "2025-05-25"
+
 ILLEGAL_CHARACTERS_RE = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F]")
 
 
-def extract_country_from_url(url: str) -> str:
-    """Infer a broad country label from the URL top-level domain."""
-    domain = urlparse(url).netloc
-    country_code = domain.split(".")[-1].lower()
+def parse_date(value: str) -> date:
+    """Parse a YYYY-MM-DD string."""
+    return datetime.strptime(value, "%Y-%m-%d").date()
+
+
+def daterange(start: date, end: date):
+    """Yield each date in an inclusive date range."""
+    current = start
+    while current <= end:
+        yield current
+        current += timedelta(days=1)
+
+
+def normalize_url(url: str) -> str:
+    """
+    Normalize URL for deduplication.
+
+    Keeps the publisher URL but removes common tracking parameters and fragments.
+    """
+    if not url:
+        return ""
+
+    parsed = urlparse(url.strip())
+    query_params = [
+        (k, v)
+        for k, v in parse_qsl(parsed.query, keep_blank_values=True)
+        if not (
+            k.lower().startswith("utm_")
+            or k.lower() in {"fbclid", "gclid", "mc_cid", "mc_eid"}
+        )
+    ]
+    cleaned = parsed._replace(query=urlencode(query_params), fragment="")
+    return urlunparse(cleaned)
+
+
+def make_article_id(url: str, title: str) -> str:
+    """Create a stable article id from normalized URL, falling back to title."""
+    key = normalize_url(url) or title
+    return hashlib.sha1(key.encode("utf-8", errors="ignore")).hexdigest()[:16]
+
+
+def extract_domain(url: str) -> str:
+    """Return the URL domain."""
+    return urlparse(url).netloc.replace("www.", "").lower() if url else ""
+
+
+def infer_country_from_url(url: str) -> str:
+    """Infer a broad country label from URL top-level domain."""
+    domain = extract_domain(url)
+    tld = domain.split(".")[-1].lower() if domain else ""
+
     tld_country_map = {
         "fr": "France",
         "ca": "Canada",
@@ -56,205 +97,255 @@ def extract_country_from_url(url: str) -> str:
         "lu": "Luxembourg",
         "ht": "Haiti",
     }
-    return tld_country_map.get(country_code, "Unknown")
-
-
-def decode_google_news_url(google_news_url: str, interval: float = 1.0, proxy: str | None = None) -> str:
-    """Decode a Google News RSS redirect URL to the publisher URL when possible."""
-    try:
-        result = gnewsdecoder(google_news_url, interval=interval, proxy=proxy)
-        if result.get("status"):
-            return result["decoded_url"]
-        print(f"Decoding failed: {result.get('message', 'unknown error')}")
-        return google_news_url
-    except Exception as exc:  # noqa: BLE001 - collection script should continue on noisy publisher failures
-        print(f"Error decoding URL: {exc}")
-        return google_news_url
-
-
-def extract_article_content(
-    url: str,
-    request_delay: float = 2.0,
-    proxy: str | None = None,
-    headers: dict[str, str] | None = None,
-) -> tuple[str, str, str, str]:
-    """Fetch a publisher page and extract basic article fields."""
-    try:
-        proxies = {"http": proxy, "https": proxy} if proxy else None
-        response = requests.get(url, headers=headers or DEFAULT_HEADERS, timeout=10, proxies=proxies)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, "html.parser")
-
-        title_tag = soup.find("h1") or soup.find("h2")
-        title = title_tag.get_text(strip=True) if title_tag else ""
-
-        paragraphs = soup.find_all("p")
-        body_text = "\n".join(p.get_text(strip=True) for p in paragraphs)
-
-        date = ""
-        meta_date = (
-            soup.find("meta", {"name": "pubdate"})
-            or soup.find("meta", {"property": "article:published_time"})
-            or soup.find("meta", {"name": "date"})
-        )
-        if meta_date and meta_date.has_attr("content"):
-            date = meta_date["content"]
-
-        description = ""
-        meta_description = soup.find("meta", {"name": "description"})
-        if meta_description and meta_description.has_attr("content"):
-            description = meta_description["content"]
-
-        time.sleep(request_delay)
-        return title, body_text, date, description
-    except Exception as exc:  # noqa: BLE001 - collection script should continue on noisy publisher failures
-        print(f"Failed to extract content from {url}: {exc}")
-        return "", "", "", ""
-
-
-def clean_date_value(value: Any) -> Any:
-    """Parse heterogeneous publisher date strings into dates where possible."""
-    if pd.isna(value):
-        return "Invalid"
-
-    text = str(value).strip()
-
-    if re.fullmatch(r"\d{2}/\d{2}/\d{4}( \d{2}:\d{2}:\d{2})?", text):
-        for fmt in ("%d/%m/%Y %H:%M:%S", "%d/%m/%Y"):
-            parsed = pd.to_datetime(text, format=fmt, errors="coerce")
-            if not pd.isna(parsed):
-                return parsed.date()
-        return "Invalid"
-
-    if re.fullmatch(r"\d{10}", text):
-        try:
-            return datetime.utcfromtimestamp(int(text)).date()
-        except ValueError:
-            return "Invalid"
-
-    text = re.split(r"C", text)[0]
-
-    if re.fullmatch(r"\d{8}", text):
-        parsed = pd.to_datetime(text, format="%Y%m%d", errors="coerce")
-        return parsed.date() if not pd.isna(parsed) else "Invalid"
-
-    parsed = pd.to_datetime(text, errors="coerce")
-    return parsed.date() if not pd.isna(parsed) else "Invalid"
+    return tld_country_map.get(tld, "Unknown")
 
 
 def clean_illegal_chars(value: Any) -> Any:
     """Remove characters that cannot be written to OpenXML spreadsheets."""
     if isinstance(value, str):
         value = ILLEGAL_CHARACTERS_RE.sub("", value)
-        value = value.replace("\xa0", " ")
+        value = value.replace("\xa0", " ").strip()
     return value
 
 
-def clean_articles(df: pd.DataFrame) -> pd.DataFrame:
-    """Normalize dates, URLs, and Excel-incompatible characters."""
-    if df.empty:
-        return df
+def clean_text(value: Any) -> str:
+    """Normalize text values."""
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return ""
+    text = str(value)
+    text = re.sub(r"\s+", " ", text)
+    return clean_illegal_chars(text)
 
-    df = df.copy()
-    df["publication_date_cleaned"] = df["publication_date"].apply(clean_date_value)
-    df["media_url"] = df["media_url"].astype(str).str.replace(r"\?.*$", "", regex=True).str.strip()
-    return df.map(clean_illegal_chars) if hasattr(df, "map") else df.applymap(clean_illegal_chars)
+
+def first_paragraph(text: str) -> str:
+    """Extract a first paragraph-like lead from full article text."""
+    if not text:
+        return ""
+    paragraphs = [p.strip() for p in re.split(r"\n{2,}|\r\n{2,}", text) if p.strip()]
+    if paragraphs:
+        return clean_text(paragraphs[0])
+
+    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
+    return clean_text(" ".join(sentences[:2]))
+
+
+def parse_gnews_published_date(value: Any) -> str:
+    """Parse the published date returned by GNews, returning YYYY-MM-DD when possible."""
+    if not value:
+        return ""
+
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+
+    text = str(value).strip()
+    parsed = pd.to_datetime(text, errors="coerce", utc=True)
+    if pd.isna(parsed):
+        return text
+    return parsed.date().isoformat()
+
+
+def get_publisher_name(item: dict[str, Any]) -> str:
+    """Extract publisher name from a GNews result."""
+    publisher = item.get("publisher", "")
+    if isinstance(publisher, dict):
+        return clean_text(publisher.get("title") or publisher.get("name") or "")
+    return clean_text(publisher)
+
+
+def get_result_url(item: dict[str, Any]) -> str:
+    """Extract URL from a GNews result."""
+    return clean_text(item.get("url") or item.get("link") or "")
+
+
+def collect_one_day(
+    query: str,
+    day: date,
+    language: str,
+    country: str,
+    max_results: int,
+    fetch_full_article: bool,
+    request_delay: float,
+) -> list[dict[str, Any]]:
+    """
+    Collect Google News results for a single day.
+
+    GNews date windows are set per day to preserve the temporally ordered
+    corpus structure used in the paper.
+    """
+    google_news = GNews(
+        language=language,
+        country=country,
+        start_date=(day.year, day.month, day.day),
+        end_date=(day.year, day.month, day.day),
+        max_results=max_results,
+    )
+
+    results = google_news.get_news(query)
+    rows: list[dict[str, Any]] = []
+
+    for item in results:
+        title = clean_text(item.get("title", ""))
+        description = clean_text(item.get("description", ""))
+        url = normalize_url(get_result_url(item))
+        publisher = get_publisher_name(item)
+        published_date = parse_gnews_published_date(item.get("published date") or item.get("published_date"))
+
+        full_text = ""
+        full_article_title = ""
+        lead_paragraph = description
+
+        if fetch_full_article and url:
+            try:
+                article = google_news.get_full_article(url)
+                if article is not None:
+                    full_article_title = clean_text(getattr(article, "title", "") or "")
+                    full_text = clean_text(getattr(article, "text", "") or "")
+                    lead_paragraph = first_paragraph(full_text) or description
+                    if not title:
+                        title = full_article_title
+                time.sleep(request_delay)
+            except Exception as exc:  # noqa: BLE001
+                print(f"Could not fetch full article for {url}: {exc}")
+
+        embedding_text = clean_text(f"{title}. {lead_paragraph}".strip(". "))
+
+        rows.append(
+            {
+                "article_id": make_article_id(url, title),
+                "query": query,
+                "collection_day": day.isoformat(),
+                "publication_date": published_date or day.isoformat(),
+                "title": title,
+                "lead_paragraph": lead_paragraph,
+                "description": description,
+                "embedding_text": embedding_text,
+                "media_url": url,
+                "source": publisher,
+                "domain": extract_domain(url),
+                "country_inferred_from_tld": infer_country_from_url(url),
+                "body_text": full_text,
+                "gnews_raw_title": clean_text(item.get("title", "")),
+                "gnews_raw_published_date": clean_text(item.get("published date", "")),
+            }
+        )
+
+    return rows
 
 
 def collect_articles(
-    start_date: str | datetime,
-    end_date: str | datetime,
+    start_date: str,
+    end_date: str,
     query: str = DEFAULT_QUERY,
-    proxy: str | None = None,
-    interval_time: float = 1.0,
-    request_delay: float = 2.0,
+    language: str = "fr",
+    country: str = "FR",
+    max_results_per_day: int = 100,
+    fetch_full_article: bool = True,
+    request_delay: float = 1.0,
 ) -> pd.DataFrame:
-    """Collect articles from Google News RSS for an inclusive date range."""
-    if isinstance(start_date, str):
-        start_dt = datetime.strptime(start_date, "%Y-%m-%d")
-    else:
-        start_dt = start_date
+    """Collect articles over an inclusive date range."""
+    start = parse_date(start_date)
+    end = parse_date(end_date)
 
-    if isinstance(end_date, str):
-        end_dt = datetime.strptime(end_date, "%Y-%m-%d")
-    else:
-        end_dt = end_date
-
-    if end_dt < start_dt:
+    if end < start:
         raise ValueError("end_date must be on or after start_date")
 
-    encoded_query = "+".join(query.split())
-    articles: list[dict[str, Any]] = []
-    current_date = start_dt
+    all_rows: list[dict[str, Any]] = []
 
-    while current_date <= end_dt:
-        after = current_date.strftime("%Y-%m-%d")
-        before = (current_date + timedelta(days=1)).strftime("%Y-%m-%d")
-        rss_url = f"https://news.google.com/rss/search?q={encoded_query}+after:{after}+before:{before}&hl=fr"
+    for day in daterange(start, end):
+        print(f"Collecting Google News results for {day.isoformat()}...")
+        try:
+            rows = collect_one_day(
+                query=query,
+                day=day,
+                language=language,
+                country=country,
+                max_results=max_results_per_day,
+                fetch_full_article=fetch_full_article,
+                request_delay=request_delay,
+            )
+            all_rows.extend(rows)
+            print(f"  collected {len(rows)} raw results")
+        except Exception as exc:  # noqa: BLE001
+            print(f"Failed on {day.isoformat()}: {exc}")
 
-        print(f"Fetching articles for: {after}")
-        feed = feedparser.parse(rss_url)
+    df = pd.DataFrame(all_rows)
 
-        for entry in feed.entries:
-            try:
-                pub_date = datetime(*entry.published_parsed[:6]) if hasattr(entry, "published_parsed") else current_date
-                google_news_url = entry.link
-                final_url = decode_google_news_url(google_news_url, interval=interval_time, proxy=proxy)
-                country = extract_country_from_url(final_url)
-                title, body_text, date_meta, description = extract_article_content(
-                    final_url,
-                    request_delay=request_delay,
-                    proxy=proxy,
-                    headers=DEFAULT_HEADERS,
-                )
+    if df.empty:
+        return df
 
-                articles.append(
-                    {
-                        "media_url": final_url,
-                        "title": title or getattr(entry, "title", ""),
-                        "body_text": body_text,
-                        "publication_date": date_meta or pub_date.strftime("%Y-%m-%d"),
-                        "description": description or getattr(entry, "description", ""),
-                        "country": country,
-                    }
-                )
-            except Exception as exc:  # noqa: BLE001 - collection script should continue across feeds
-                print(f"Error processing article: {exc}")
-                continue
+    for col in df.columns:
+        df[col] = df[col].map(clean_illegal_chars)
 
-        current_date += timedelta(days=1)
+    # Deduplicate after daily collection.
+    # Prefer rows with a non-empty lead paragraph and body text.
+    df["has_lead"] = df["lead_paragraph"].astype(str).str.len() > 0
+    df["has_body"] = df["body_text"].astype(str).str.len() > 0
+    df = (
+        df.sort_values(["article_id", "has_lead", "has_body"], ascending=[True, False, False])
+        .drop_duplicates(subset=["article_id"], keep="first")
+        .drop(columns=["has_lead", "has_body"])
+        .reset_index(drop=True)
+    )
 
-    return clean_articles(pd.DataFrame(articles))
+    # Keep a cleaned date column for compatibility with the previous script.
+    df["publication_date_cleaned"] = pd.to_datetime(
+        df["publication_date"], errors="coerce"
+    ).dt.date.astype("string")
+
+    return df
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Collect CLIMATENEWSFR Google News articles.")
-    parser.add_argument("--start-date", required=True, help="Inclusive start date, YYYY-MM-DD")
-    parser.add_argument("--end-date", required=True, help="Inclusive end date, YYYY-MM-DD")
+    parser = argparse.ArgumentParser(
+        description="Collect CLIMATENEWSFR-style Google News articles using GNews."
+    )
+    parser.add_argument("--start-date", default=DEFAULT_START_DATE, help="Inclusive start date, YYYY-MM-DD")
+    parser.add_argument("--end-date", default=DEFAULT_END_DATE, help="Inclusive end date, YYYY-MM-DD")
     parser.add_argument("--query", default=DEFAULT_QUERY, help="Google News search query")
-    parser.add_argument("--output", default=None, help="Output .xlsx path. Defaults to articles_climate_cleaned_<date>.xlsx")
-    parser.add_argument("--proxy", default=None, help="Optional HTTP(S) proxy URL")
-    parser.add_argument("--interval-time", type=float, default=1.0, help="Delay used by googlenewsdecoder")
-    parser.add_argument("--request-delay", type=float, default=2.0, help="Delay after publisher-page requests")
+    parser.add_argument("--language", default="fr", help="GNews language code")
+    parser.add_argument("--country", default="FR", help="GNews country code")
+    parser.add_argument("--max-results-per-day", type=int, default=100, help="Maximum Google News results per day")
+    parser.add_argument("--no-full-article", action="store_true", help="Do not fetch publisher pages with newspaper3k")
+    parser.add_argument("--request-delay", type=float, default=1.0, help="Delay after full-article requests")
+    parser.add_argument(
+        "--output",
+        default="articles_climate_cleaned.xlsx",
+        help="Output path: .xlsx, .csv, or .jsonl",
+    )
     return parser.parse_args()
+
+
+def save_dataframe(df: pd.DataFrame, output: str) -> None:
+    """Save output based on extension."""
+    path = Path(output)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    suffix = path.suffix.lower()
+    if suffix == ".xlsx":
+        df.to_excel(path, index=False)
+    elif suffix == ".csv":
+        df.to_csv(path, index=False)
+    elif suffix in {".jsonl", ".ndjson"}:
+        df.to_json(path, orient="records", lines=True, force_ascii=False)
+    else:
+        raise ValueError("Output must end with .xlsx, .csv, .jsonl, or .ndjson")
 
 
 def main() -> None:
     args = parse_args()
-    df_articles = collect_articles(
+
+    df = collect_articles(
         start_date=args.start_date,
         end_date=args.end_date,
         query=args.query,
-        proxy=args.proxy,
-        interval_time=args.interval_time,
+        language=args.language,
+        country=args.country,
+        max_results_per_day=args.max_results_per_day,
+        fetch_full_article=not args.no_full_article,
         request_delay=args.request_delay,
     )
 
-    output_path = Path(args.output) if args.output else Path(f"articles_climate_cleaned_{datetime.now():%Y-%m-%d}.xlsx")
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    df_articles.to_excel(output_path, index=False)
-    print(f"Saved {len(df_articles)} articles to {output_path}")
+    save_dataframe(df, args.output)
+    print(f"Saved {len(df)} unique articles to {args.output}")
 
 
-if __name__ == "__main__":
-    main()
