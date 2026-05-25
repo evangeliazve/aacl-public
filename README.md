@@ -278,7 +278,7 @@ python SCRIPTS/06_run_ml_experiments.py \
   --output RESULTS/climatenewsfr/climatenewsfr_results_rerun.xlsx
 ```
 
-Rerun values may differ slightly from the archived workbooks because some estimators include stochastic components.
+Exact reproduction of the reported supervised-stage tables uses Python 3.12 and the package versions pinned in requirements.txt / environment.yml. The released scripts use GroupKFold with five folds, random_state=42 for stochastic classifiers, and n_jobs=-1 for XGBoost and Random Forest.
 
 Expected runtime depends on hardware. The supervised-stage ML scripts run from the released feature matrices and are substantially faster than the full trajectory-reconstruction pipeline. The full pipeline requires local article data, embeddings/API outputs, and may take considerably longer.
 
