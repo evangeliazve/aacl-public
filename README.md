@@ -227,9 +227,9 @@ DATA/collection_scripts/climatenewsfr_data_collection_X.py
 
 These scripts document the collection procedure used for the CLIMATENEWSFR corpus. They are parameterized command-line scripts and do not execute at import time.
 
-News articles were collected with Google News RSS/decoding utilities. X-sharing activity was collected through the X API.
+News articles were collected from Google News results using the [GNews Python library](https://pypi.org/project/gnews/), with the French query `changement climatique`. The default collection window matches the paper: `2025-04-02` to `2025-05-25`. The article-level text used for downstream embedding is constructed from the available title and lead paragraph.
 
-Raw article text, raw social-media traces, and private collection files are not redistributed.
+X-sharing activity was collected separately through the official [X API](https://docs.x.com/x-api/introduction).
 
 ---
 
