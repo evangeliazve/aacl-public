@@ -10,7 +10,6 @@ one data archive containing released matrices/results/appendix workbooks,
 and one software archive containing scripts, configuration, dependencies,
 and documentation. The GitHub repository keeps both parts together for convenience.
 
----
 
 ## Repository structure
 
@@ -60,7 +59,7 @@ run_all.sh
 README.md
 ```
 
----
+
 
 ## Released feature matrices
 
@@ -84,7 +83,7 @@ The remaining columns are the geometric, textual, named-entity, and social/co-sh
 
 The released matrices include `agreement_k` values from 1 to 8.
 
----
+
 
 ## Machine-learning results
 
@@ -184,7 +183,7 @@ Detailed column descriptions are in:
 DOCS/TABLE_SCHEMAS.md
 ```
 
----
+
 
 ## Agreement outputs
 
@@ -203,7 +202,7 @@ TOA matrix and agreement
 
 It includes article identifiers, publication dates, model-specific trajectory assignments, anticipatory-vote counts, and publication-time outlier-vote counts.
 
----
+
 
 ## SHAP interpretation outputs
 
@@ -221,7 +220,7 @@ The filename tag encodes the selected consensus rule:
 
 These workbooks contain the global and local SHAP outputs for the selected XGBoost models.
 
----
+
 
 ## Data collection scripts
 
@@ -236,7 +235,6 @@ News articles were collected from Google News results using the [GNews Python li
 
 X-sharing activity was collected separately through the official [X API](https://docs.x.com/x-api/introduction).
 
----
 
 ## Installation
 
@@ -259,7 +257,6 @@ python -m spacy download fr_core_news_md
 
 The French spaCy model is used for named-entity features.
 
----
 
 ## Rerun supervised-stage experiments
 
@@ -287,7 +284,6 @@ Exact reproduction of the reported supervised-stage tables uses Python 3.12 and 
 
 Expected runtime depends on hardware. The supervised-stage ML scripts run from the released feature matrices and are substantially faster than the full trajectory-reconstruction pipeline. The full pipeline requires local article data, embeddings/API outputs, and may take considerably longer.
 
----
 
 ## Rerun SHAP interpretation
 
@@ -311,7 +307,6 @@ python SCRIPTS/07_shap_oof_interpretation.py \
   --output RESULTS/climatenewsfr/climatenewsfr_interpretability_k660_xgboost_rerun.xlsx
 ```
 
----
 
 ## Pipeline scripts
 
@@ -326,7 +321,6 @@ python SCRIPTS/07_shap_oof_interpretation.py \
 | `06_run_ml_experiments.py` | Run supervised models, ablations, and selected-setting paired ablation tests. |
 | `07_shap_oof_interpretation.py` | Compute XGBoost SHAP interpretation outputs. |
 
----
 
 ## Main experimental settings
 
