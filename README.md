@@ -5,6 +5,11 @@ Reproducibility materials for our EMNLP submission
 
 The repository includes the released feature matrices, machine-learning result workbooks, agreement outputs, SHAP interpretation tables, and scripts used to rerun the supervised-stage experiments.
 
+For OpenReview submission, the materials are separated into two archives:
+one data archive containing released matrices/results/appendix workbooks,
+and one software archive containing scripts, configuration, dependencies,
+and documentation. The GitHub repository keeps both parts together for convenience.
+
 ---
 
 ## Repository structure
