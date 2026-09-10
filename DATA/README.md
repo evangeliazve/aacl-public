@@ -1,12 +1,13 @@
 # DATA
 
-This folder contains shareable article-level workbooks used for review.
+No data files are distributed in this repository.
 
-The raw article text, raw collection files, and raw social-media traces are not redistributed here because they may be subject to publisher, API, or platform restrictions.
+Raw article text, raw collection files, social-media traces, embeddings, and derived feature matrices are not redistributed, because they may be subject to publisher, API, or platform restrictions.
 
-## Files
+## Contents
 
-- `hydronewsfr_article-url_target_features_all_k.xlsx`: article URL, agreement threshold, target label, and final model features for HYDRONEWSFR.
-- `climatenewsfr_article-url_target_features_all_k.xlsx`: article URL, agreement threshold, target label, and final model features for CLIMATENEWSFR.
+- `collection_scripts/`: scripts documenting how the CLIMATENEWSFR corpus was collected (Google News via GNews, and X sharing activity via the X API).
 
-For full reproduction on a new corpus, provide local article and optional social-sharing files following the schemas in `DOCS/TABLE_SCHEMAS.md`. The default example configuration expects private local files under `DATA/private/`.
+## Using your own data
+
+Place local input files under `DATA/private/` (not tracked by Git). The expected formats of the article table, the optional social-sharing table, and precomputed embeddings are described in the main `README.md`, section "Input data".
