@@ -21,22 +21,10 @@ DATA/
   collection_scripts/
     climatenewsfr_data_collection_googlenews.py
     climatenewsfr_data_collection_X.py
-  climatenewsfr_article-url_target_features_all_k.xlsx
-  hydronewsfr_article-url_target_features_all_k.xlsx
+  
 
 DOCS/
   TABLE_SCHEMAS.md
-
-RESULTS/
-  agreement/
-    agreement_hdbscan_th30_d20.xlsx
-    agreement_hdbscan_th30_d20_climat.xlsx
-  climatenewsfr/
-    climatenewsfr_results.xlsx
-    climatenewsfr_interpretability_k660_xgboost.xlsx
-  hydronewsfr/
-    hydronewsfr_results.xlsx
-    hydronewsfr_interpretability_k440_xgboost.xlsx
 
 SCRIPTS/
   00_validate_inputs.py
