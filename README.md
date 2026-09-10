@@ -1,29 +1,29 @@
 # Predicting Emerging Topics from Outliers: A Prospective Study of Weak Signals in Embedding Space
 
-Reproducibility materials for our paper, accepted at AACL-IJCNLP 2026 (Findings).
+Code for our paper, accepted at AACL-IJCNLP 2026 (Findings).
 
-The repository includes the released feature matrices, machine-learning result workbooks, agreement outputs, SHAP interpretation tables, and scripts used to rerun the supervised-stage experiments.
+This repository contains the pipeline scripts, configuration, dependencies, data-collection scripts, and documentation needed to run the method on a news corpus.
 
-For OpenReview submission, the materials are separated into two archives:
-one data archive containing released matrices/results/appendix workbooks,
-and one software archive containing scripts, configuration, dependencies,
-and documentation. The GitHub repository keeps both parts together for convenience.
+**Data are not included.** Raw article text, social-media traces, embeddings, feature matrices, and result workbooks are not redistributed in this repository, because they may be subject to publisher, API, or platform restrictions. To run the pipeline, provide your own local files in the formats described below.
 
 
 ## Repository structure
 
 ```text
+APPENDIX/
+  ml_feature_glossary.xlsx        Description of every feature used by the models
+
 CONFIG/
-  config.example.yaml
+  config.example.yaml             Example configuration (paths, clustering, labeling, ML)
 
 DATA/
   README.md
   collection_scripts/
     climatenewsfr_data_collection_googlenews.py
     climatenewsfr_data_collection_X.py
-  
+
 DOCS/
-  TABLE_SCHEMAS.md
+  TABLE_SCHEMAS.md                Column descriptions of the ML result workbooks
 
 SCRIPTS/
   00_validate_inputs.py
@@ -35,190 +35,13 @@ SCRIPTS/
   06_run_ml_experiments.py
   07_shap_oof_interpretation.py
 
-APPENDIX/
-  ml_feature_glossary.xlsx
-
-requirements.txt
 environment.yml
+requirements.txt
 run_all.sh
 README.md
 ```
 
-
-
-## Released feature matrices
-
-```text
-DATA/hydronewsfr_article-url_target_features_all_k.xlsx
-DATA/climatenewsfr_article-url_target_features_all_k.xlsx
-```
-
-Each workbook contains a `feature_matrix` sheet. Rows correspond to article-threshold pairs.
-
-Main columns:
-
-| Column | Description |
-|---|---|
-| `article_url` | Article identifier used in the released matrix. |
-| `agreement_k` | Diagonal consensus threshold, with `agreement_k = outlier_k = toa_k`. |
-| `label_TOA` | Binary supervised label. `1` indicates a consensus anticipatory outlier; `0` indicates a confident non-anticipatory publication-time outlier. |
-| `n_models_present` | Number of embedding-model representations available for the article. |
-
-The remaining columns are the geometric, textual, named-entity, and social/co-sharing features used in the supervised models.
-
-The released matrices include `agreement_k` values from 1 to 8.
-
-
-
-## Machine-learning results
-
-```text
-RESULTS/hydronewsfr/hydronewsfr_results.xlsx
-RESULTS/climatenewsfr/climatenewsfr_results.xlsx
-```
-
-Each workbook contains:
-
-```text
-ml_metrics_with_ablation
-fold_ablation
-fold_ablation_paired_tests
-```
-
-### `ml_metrics_with_ablation`
-
-Cross-validated supervised-learning results across agreement thresholds.
-
-The sheet uses the diagonal rule:
-
-```text
-outlier_k = toa_k = agreement_k
-toa_max_neg = 0
-```
-
-Reported metrics:
-
-```text
-Precision
-F1
-Recall
-```
-
-Classifier labels:
-
-| Label | Classifier |
-|---|---|
-| `xgb` | XGBoost |
-| `rf` | Random Forest |
-| `logreg` | Logistic Regression |
-| `linear_svc` | Linear Support Vector Classifier |
-| `dt` | Decision Tree |
-| `baseline_all_pos` | Constant-positive baseline |
-
-Ablation labels:
-
-| Label | Description |
-|---|---|
-| `all_features` | Geometric, textual, and social features. |
-| `no_geom` | All features except geometric features. |
-| `no_social` | All features except social features. |
-| `no_text` | All features except textual features. |
-| `only_geom` | Geometric features only. |
-| `only_social` | Social features only. |
-| `only_text` | Textual features only. |
-| `baseline` | Baseline row. |
-
-The baseline is reported once per agreement threshold.
-
-### `fold_ablation`
-
-Fold-level XGBoost ablation results for the selected paper settings:
-
-```text
-HYDRONEWSFR:   k = 4 -> (4, 4, 0)
-CLIMATENEWSFR: k = 6 -> (6, 6, 0)
-```
-
-This sheet contains one row per cross-validation fold and ablation setting.
-
-### `fold_ablation_paired_tests`
-
-Paired fold-level t-tests for the selected XGBoost ablation comparisons.
-
-The sheet reports tests for:
-
-```text
-F1
-Precision
-Recall
-```
-
-The paper table uses significance symbols only for F1. Precision and recall tests are included to document whether the F1 changes are driven by one or both components.
-
-Paper-symbol convention:
-
-| Symbol | Meaning |
-|---|---|
-| `†` | Significant F1 drop relative to `all_features` after Benjamini-Hochberg correction. |
-| `‡` | Significant F1 drop relative to `only_geom` after Benjamini-Hochberg correction. |
-
-Detailed column descriptions are in:
-
-```text
-DOCS/TABLE_SCHEMAS.md
-```
-
-
-
-## Agreement outputs
-
-```text
-RESULTS/agreement/agreement_hdbscan_th30_d20.xlsx
-RESULTS/agreement/agreement_hdbscan_th30_d20_climat.xlsx
-```
-
-These workbooks contain model-specific trajectory labels and agreement summaries.
-
-The main sheet is:
-
-```text
-TOA matrix and agreement
-```
-
-It includes article identifiers, publication dates, model-specific trajectory assignments, anticipatory-vote counts, and publication-time outlier-vote counts.
-
-
-
-## SHAP interpretation outputs
-
-```text
-RESULTS/hydronewsfr/hydronewsfr_interpretability_k440_xgboost.xlsx
-RESULTS/climatenewsfr/climatenewsfr_interpretability_k660_xgboost.xlsx
-```
-
-The filename tag encodes the selected consensus rule:
-
-| Tag | Meaning |
-|---|---|
-| `k440` | `outlier_k=4`, `toa_k=4`, `toa_max_neg=0` |
-| `k660` | `outlier_k=6`, `toa_k=6`, `toa_max_neg=0` |
-
-These workbooks contain the global and local SHAP outputs for the selected XGBoost models.
-
-
-
-## Data collection scripts
-
-```text
-DATA/collection_scripts/climatenewsfr_data_collection_googlenews.py
-DATA/collection_scripts/climatenewsfr_data_collection_X.py
-```
-
-These scripts document the collection procedure used for the CLIMATENEWSFR corpus. They are parameterized command-line scripts and do not execute at import time.
-
-News articles were collected from Google News results using the [GNews Python library](https://pypi.org/project/gnews/), with the French query `changement climatique`. The default collection window matches the paper: `2025-04-02` to `2025-05-25`. The article-level text used for downstream embedding is constructed from the available title and lead paragraph.
-
-X-sharing activity was collected separately through the official [X API](https://docs.x.com/x-api/introduction).
+The folders `DATA/private/` (your input data) and `RESULTS/` (pipeline outputs) are created locally and should not be committed.
 
 
 ## Installation
@@ -240,76 +63,130 @@ conda activate topic-outlier-reproduction
 python -m spacy download fr_core_news_md
 ```
 
-The French spaCy model is used for named-entity features.
+The French spaCy model is used for named-entity features. The reported experiments use Python 3.12 and the package versions pinned in `requirements.txt` / `environment.yml`.
 
 
-## Rerun supervised-stage experiments
+## Input data
 
-HYDRONEWSFR:
+Paths and column names are set in `CONFIG/config.example.yaml`. Copy it and edit the copy for your corpus.
+
+### Article table (required)
+
+`input.articles`, default `DATA/private/articles.csv` (`.csv` or `.xlsx`). One row per article.
+
+| Config key | Default column | Description |
+|---|---|---|
+| `article_id_col` | `media_url` | Unique article identifier. |
+| `url_col` | `media_url` | Article URL, used to join with the social-sharing table. |
+| `date_col` | `publication_date_cleaned` | Publication date (parseable by pandas). |
+| `title_col` | `title` | Article title. |
+| `text_col` | `description` | Lead paragraph or short text. |
+
+The text embedded for each article is built from `embedding.text_template` (default `"{title} {description}"`).
+
+### Social-sharing table (optional)
+
+`input.shares`, default `DATA/private/social_shares.csv`. One row per share. If the file is missing, social features are set to zero.
+
+| Column | Description |
+|---|---|
+| `media_url`, `article_url`, or `url` | Shared article, matching the article table. |
+| `created_at` | Share timestamp. Only shares before the article's evaluation time are used. |
+| `author_id` or `user_id` | Sharing account. |
+| `followers_count`, `tweet_count`, `listed_count` | Optional account metrics (the `user_public_metrics_` prefix is also accepted). |
+
+### Embeddings
+
+Models of type `sentence_transformer` are computed locally. For API-based models, set `type: precomputed` and place one file per model in `embedding.precomputed_dir` (default `DATA/private/embeddings/<short_name>.npy` or `.csv`), with rows aligned to the article table.
+
+
+## Running the pipeline
+
+Full pipeline with one command:
+
+```bash
+bash run_all.sh CONFIG/my_config.yaml
+```
+
+Outputs are written to `output_dir` from the configuration (default `RESULTS/<project_name>/`).
+
+Or step by step:
+
+| Script | Purpose | Main output |
+|---|---|---|
+| `00_validate_inputs.py` | Check input files, columns, dates, and embeddings. | — |
+| `01_dynamic_topic_reconstruction.py` | Build cumulative daily topic snapshots per embedding model. | `models/<short_name>/results.csv` |
+| `02_trajectory_annotation_matrix.py` | Build model-specific article trajectory labels. | `trajectory_matrix.xlsx` |
+| `03_calculate_agreement.py` | Compute agreement-based consensus labels. | `agreement_labels.xlsx` |
+| `04_create_features_long_tables.py` | Compute publication-time features. | `feature_article_level.csv` |
+| `05_export_feature_matrix.py` | Export the article-threshold feature matrix. | `article_url_target_features_all_k.xlsx` |
+| `06_run_ml_experiments.py` | Run classifiers, ablations, and paired ablation tests. | `results.xlsx` |
+| `07_shap_oof_interpretation.py` | Compute XGBoost SHAP interpretation. | `interpretability_k<tag>_xgboost.xlsx` |
+
+### Supervised experiments
 
 ```bash
 python SCRIPTS/06_run_ml_experiments.py \
-  --feature-matrix DATA/hydronewsfr_article-url_target_features_all_k.xlsx \
+  --feature-matrix RESULTS/<project_name>/article_url_target_features_all_k.xlsx \
   --thresholds 1 2 3 4 5 6 7 8 \
   --selected-ablation-k 4 \
-  --output RESULTS/hydronewsfr/hydronewsfr_results_rerun.xlsx
+  --output RESULTS/<project_name>/results.xlsx
 ```
 
-CLIMATENEWSFR:
+`--selected-ablation-k` adds the fold-level ablation and paired-test sheets for the chosen threshold. Without it, only `ml_metrics_with_ablation` is produced.
 
-```bash
-python SCRIPTS/06_run_ml_experiments.py \
-  --feature-matrix DATA/climatenewsfr_article-url_target_features_all_k.xlsx \
-  --thresholds 1 2 3 4 5 6 7 8 \
-  --selected-ablation-k 6 \
-  --output RESULTS/climatenewsfr/climatenewsfr_results_rerun.xlsx
-```
-
-Exact reproduction of the reported supervised-stage tables uses Python 3.12 and the package versions pinned in requirements.txt / environment.yml. The released scripts use GroupKFold with five folds, random_state=42 for stochastic classifiers, and n_jobs=-1 for XGBoost and Random Forest.
-
-Expected runtime depends on hardware. The supervised-stage ML scripts run from the released feature matrices and are substantially faster than the full trajectory-reconstruction pipeline. The full pipeline requires local article data, embeddings/API outputs, and may take considerably longer.
-
-
-## Rerun SHAP interpretation
-
-HYDRONEWSFR:
+### SHAP interpretation
 
 ```bash
 python SCRIPTS/07_shap_oof_interpretation.py \
-  --feature-matrix DATA/hydronewsfr_article-url_target_features_all_k.xlsx \
+  --feature-matrix RESULTS/<project_name>/article_url_target_features_all_k.xlsx \
   --agreement-k 4 \
-  --dataset-name hydronewsfr \
-  --output RESULTS/hydronewsfr/hydronewsfr_interpretability_k440_xgboost_rerun.xlsx
+  --dataset-name <project_name> \
+  --output RESULTS/<project_name>/interpretability_k440_xgboost.xlsx
 ```
 
-CLIMATENEWSFR:
-
-```bash
-python SCRIPTS/07_shap_oof_interpretation.py \
-  --feature-matrix DATA/climatenewsfr_article-url_target_features_all_k.xlsx \
-  --agreement-k 6 \
-  --dataset-name climatenewsfr \
-  --output RESULTS/climatenewsfr/climatenewsfr_interpretability_k660_xgboost_rerun.xlsx
-```
+The filename tag encodes the consensus rule: `k440` means `outlier_k=4`, `toa_k=4`, `toa_max_neg=0`.
 
 
-## Pipeline scripts
+## Outputs
 
-| Script | Purpose |
+### Feature matrix
+
+`article_url_target_features_all_k.xlsx`, sheet `feature_matrix`. One row per article-threshold pair.
+
+| Column | Description |
 |---|---|
-| `00_validate_inputs.py` | Validate local input files. |
-| `01_dynamic_topic_reconstruction.py` | Build cumulative daily topic snapshots. |
-| `02_trajectory_annotation_matrix.py` | Build model-specific article trajectory labels. |
-| `03_calculate_agreement.py` | Compute agreement-based consensus labels. |
-| `04_create_features_long_tables.py` | Create publication-time feature tables. |
-| `05_export_feature_matrix.py` | Export the article-threshold feature matrix. |
-| `06_run_ml_experiments.py` | Run supervised models, ablations, and selected-setting paired ablation tests. |
-| `07_shap_oof_interpretation.py` | Compute XGBoost SHAP interpretation outputs. |
+| `article_url` | Article identifier. |
+| `agreement_k` | Diagonal consensus threshold, with `agreement_k = outlier_k = toa_k`. |
+| `label_TOA` | `1` for a consensus anticipatory outlier; `0` for a confident non-anticipatory publication-time outlier. |
+| `n_models_present` | Number of embedding models in which the article is represented. |
+
+The remaining columns are geometric, textual, named-entity, and social/co-sharing features, described in `APPENDIX/ml_feature_glossary.xlsx`.
+
+### ML results
+
+`results.xlsx` contains three sheets:
+
+| Sheet | Content |
+|---|---|
+| `ml_metrics_with_ablation` | Cross-validated precision, recall, and F1 per threshold, classifier, and feature set. |
+| `fold_ablation` | Fold-level XGBoost ablation results for the selected threshold. |
+| `fold_ablation_paired_tests` | Paired t-tests between ablations, with Benjamini-Hochberg correction. |
+
+Classifiers: `xgb` (XGBoost), `rf` (Random Forest), `logreg` (Logistic Regression), `linear_svc` (Linear SVC), `dt` (Decision Tree), and `baseline_all_pos` (constant-positive baseline).
+
+Feature sets: `all_features`, `no_geom`, `no_social`, `no_text`, `only_geom`, `only_social`, `only_text`.
+
+Full column descriptions and the significance-symbol convention used in the paper are in `DOCS/TABLE_SCHEMAS.md`.
+
+### SHAP interpretation
+
+`interpretability_k<tag>_xgboost.xlsx` contains `xgb_global_shap` (global feature importance), `xgb_oof_local_shap` (out-of-fold local explanations), and `xgb_local_shap` (local explanations for all articles).
 
 
 ## Main experimental settings
 
-The main experiments use cumulative daily snapshots, UMAP with 20 dimensions, HDBSCAN clustering, centroid-based topic alignment with threshold `0.30`, and an ensemble of embedding models.
+The paper uses cumulative daily snapshots, UMAP with 20 dimensions, HDBSCAN clustering, centroid-based topic alignment with threshold `0.30`, and an ensemble of embedding models. Supervised models use `GroupKFold` with five folds and `random_state=42`, and are evaluated at publication time.
 
 Selected agreement thresholds:
 
@@ -318,4 +195,26 @@ HYDRONEWSFR:   outlier_k=4, toa_k=4, toa_max_neg=0
 CLIMATENEWSFR: outlier_k=6, toa_k=6, toa_max_neg=0
 ```
 
-The supervised task is evaluated at publication time.
+
+## Data collection (CLIMATENEWSFR)
+
+The scripts in `DATA/collection_scripts/` document how the CLIMATENEWSFR corpus was collected.
+
+News articles were collected from Google News with the [GNews Python library](https://pypi.org/project/gnews/), using the French query `changement climatique` between `2025-04-02` and `2025-05-25`:
+
+```bash
+python DATA/collection_scripts/climatenewsfr_data_collection_googlenews.py \
+  --start-date 2025-04-02 \
+  --end-date 2025-05-25 \
+  --output DATA/private/climatenewsfr/articles.xlsx
+```
+
+X sharing activity was collected through the official [X API](https://docs.x.com/x-api/introduction). Pass your own token through an environment variable, never in the code:
+
+```bash
+export X_BEARER_TOKEN="..."
+python DATA/collection_scripts/climatenewsfr_data_collection_X.py \
+  --start-time 2025-04-02T00:00:00Z \
+  --end-time 2025-05-25T23:59:59Z \
+  --output-dir DATA/private/climatenewsfr/x
+```
