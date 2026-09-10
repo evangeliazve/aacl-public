@@ -22,7 +22,6 @@ DATA/
     climatenewsfr_data_collection_googlenews.py
     climatenewsfr_data_collection_X.py
   
-
 DOCS/
   TABLE_SCHEMAS.md
 
@@ -38,7 +37,6 @@ SCRIPTS/
 
 APPENDIX/
   ml_feature_glossary.xlsx
-  additional_experiments/
 
 requirements.txt
 environment.yml
