@@ -1,7 +1,6 @@
 # Predicting Emerging Topics from Outliers: A Prospective Study of Weak Signals in Embedding Space
 
-Reproducibility materials for our EMNLP submission
-
+Reproducibility materials for our paper, accepted at AACL-IJCNLP.
 
 The repository includes the released feature matrices, machine-learning result workbooks, agreement outputs, SHAP interpretation tables, and scripts used to rerun the supervised-stage experiments.
 
