@@ -182,7 +182,7 @@ def summarize(
     for metric in PAPER_METRICS:
         vals = [s[metric] for s in fold_scores if metric in s]
         row[f"{metric}_mean"] = float(np.nanmean(vals)) if vals else np.nan
-        row[f"{metric}_std"] = float(np.nanstd(vals, ddof=1)) if len(vals) > 1 else np.nan
+        row[f"{metric}_std"] = float(np.nanstd(vals)) if vals else np.nan
     return row
 
 
